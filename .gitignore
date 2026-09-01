@@ -1,7 +1,7 @@
 # Binaries
 /bin/
 /dist/
-lanproxy-gateway
+/lanproxy-gateway
 *.exe
 *.dll
 *.so
