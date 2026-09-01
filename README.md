@@ -55,23 +55,23 @@ wget -q -c --no-check-certificate -O /tmp/lanproxy-gateway.tar.gz \
 tar -xzf /tmp/lanproxy-gateway.tar.gz -C /tmp
 
 # 2. 替换二进制(mv -f 原子覆盖)
-sudo mv -f /tmp/lanproxy-gateway-linux-amd64 /usr/local/bin/lanproxy-gateway
-sudo chmod +x /usr/local/bin/lanproxy-gateway
+mv -f /tmp/lanproxy-gateway-linux-amd64 /usr/local/bin/lanproxy-gateway
+chmod +x /usr/local/bin/lanproxy-gateway
 
 # 3. 生成默认配置
-sudo lanproxy-gateway config init
+lanproxy-gateway config init
 
 # 4. 编辑配置(务必修改 web 用户名/密码,确认 upstream 指向 clash)
-sudo vi /etc/lanproxy-gateway/gateway.yaml
+vi /etc/lanproxy-gateway/gateway.yaml
 
 # 5. 下载 systemd 单元到 /tmp 再替换
 wget -q -c --no-check-certificate -O /tmp/lanproxy-gateway.service \
   "https://down.xiaonuo.live?url=https://raw.githubusercontent.com/iflyelf/lanproxy-gateway/main/deploy/systemd/lanproxy-gateway.service"
-sudo mv -f /tmp/lanproxy-gateway.service /etc/systemd/system/lanproxy-gateway.service
+mv -f /tmp/lanproxy-gateway.service /etc/systemd/system/lanproxy-gateway.service
 
 # 6. 启动服务
-sudo systemctl daemon-reload
-sudo systemctl enable --now lanproxy-gateway
+systemctl daemon-reload
+systemctl enable --now lanproxy-gateway
 
 # 7. 查看状态与接入指引
 lanproxy-gateway status
