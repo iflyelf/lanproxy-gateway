@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/iflyelf/lanproxy-gateway/internal/api"
 	"github.com/iflyelf/lanproxy-gateway/internal/auth"
 	"github.com/iflyelf/lanproxy-gateway/internal/config"
 	"github.com/iflyelf/lanproxy-gateway/internal/device"
+	"github.com/iflyelf/lanproxy-gateway/internal/logger"
 	"github.com/iflyelf/lanproxy-gateway/internal/netfilter"
 	"github.com/iflyelf/lanproxy-gateway/internal/relay"
 	"github.com/iflyelf/lanproxy-gateway/internal/route"
@@ -39,7 +39,7 @@ func New(cfg *config.Config) (*App, error) {
 			return nil, fmt.Errorf("自动探测 LAN 网卡失败,请在配置中显式设置 lan_interface: %w", err)
 		}
 		cfg.LANInterface = iface
-		log.Printf("自动探测到 LAN 网卡: %s", iface)
+		logger.Infof("自动探测到 LAN 网卡: %s", iface)
 	}
 
 	collector := stats.New(500)
@@ -74,31 +74,31 @@ func New(cfg *config.Config) (*App, error) {
 
 // Run 启动所有子系统并阻塞,直到 Stop 被调用或发生致命错误。
 func (a *App) Run() error {
-	log.Println("启动 relay...")
+	logger.Infof("启动 relay...")
 	if err := a.relay.Start(); err != nil {
 		return fmt.Errorf("启动 relay 失败: %w", err)
 	}
 
-	log.Println("配置策略路由...")
+	logger.Infof("配置策略路由...")
 	if err := a.route.Setup(); err != nil {
 		a.relay.Stop()
 		return fmt.Errorf("配置路由失败: %w", err)
 	}
 
-	log.Println("加载 nftables TPROXY 规则...")
+	logger.Infof("加载 nftables TPROXY 规则...")
 	if err := a.netfilter.Setup(); err != nil {
 		a.route.Restore()
 		a.relay.Stop()
 		return fmt.Errorf("加载 nftables 失败: %w", err)
 	}
 
-	log.Println("启动设备扫描...")
+	logger.Infof("启动设备扫描...")
 	a.scanner.Start(a.ctx)
 
-	log.Println("启动流量采样...")
+	logger.Infof("启动流量采样...")
 	go a.collector.StartSampling(a.ctx)
 
-	log.Printf("启动 WebUI: http://%s", a.cfg.Web.Listen)
+	logger.Infof("启动 WebUI: http://%s", a.cfg.Web.Listen)
 	errCh := make(chan error, 1)
 	go func() {
 		if err := a.apiSrv.Start(); err != nil {
@@ -116,20 +116,20 @@ func (a *App) Run() error {
 
 // Stop 优雅停止并清理所有系统状态。
 func (a *App) Stop() {
-	log.Println("正在停止网关并清理系统状态...")
+	logger.Infof("正在停止网关并清理系统状态...")
 	a.cancel()
 	if a.apiSrv != nil {
 		a.apiSrv.Stop()
 	}
 	a.scanner.Stop()
 	if err := a.netfilter.Restore(); err != nil {
-		log.Printf("清理 nftables 出错: %v", err)
+		logger.Errorf("清理 nftables 出错: %v", err)
 	}
 	if err := a.route.Restore(); err != nil {
-		log.Printf("清理路由出错: %v", err)
+		logger.Errorf("清理路由出错: %v", err)
 	}
 	a.relay.Stop()
-	log.Println("已停止。")
+	logger.Infof("已停止。")
 }
 
 // detectDefaultInterface 通过默认路由探测出口网卡。

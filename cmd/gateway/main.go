@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/iflyelf/lanproxy-gateway/internal/app"
 	"github.com/iflyelf/lanproxy-gateway/internal/config"
+	"github.com/iflyelf/lanproxy-gateway/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -47,6 +47,18 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// 初始化日志(按天切割 + 保留 N 天 + 级别控制)。
+			if err := logger.Init(logger.Options{
+				Path:       cfg.Log.Path,
+				Level:      logger.ParseLevel(cfg.Log.Level),
+				MaxAgeDays: cfg.Log.MaxAgeDays,
+				Console:    cfg.Log.Console,
+			}); err != nil {
+				return fmt.Errorf("初始化日志失败: %w", err)
+			}
+			defer logger.Close()
+
 			a, err := app.New(cfg)
 			if err != nil {
 				return err
@@ -55,7 +67,7 @@ func runCmd() *cobra.Command {
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-			log.Printf("lanproxy-gateway %s 启动中...", version)
+			logger.Infof("lanproxy-gateway %s 启动中...", version)
 
 			// Run 在独立协程中执行,主协程等待信号或运行错误。
 			// 收到信号后同步执行 Stop(),确保 nftables/策略路由清理完成再退出,
@@ -65,7 +77,7 @@ func runCmd() *cobra.Command {
 
 			select {
 			case sig := <-sigCh:
-				log.Printf("收到信号 %v,开始清理...", sig)
+				logger.Infof("收到信号 %v,开始清理...", sig)
 				a.Stop()
 				return nil
 			case err := <-runErr:

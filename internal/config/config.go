@@ -24,6 +24,21 @@ type Config struct {
 
 	// Device 是设备发现相关配置。
 	Device DeviceConfig `yaml:"device"`
+
+	// Log 是日志相关配置。
+	Log LogConfig `yaml:"log"`
+}
+
+// LogConfig 描述日志输出。
+type LogConfig struct {
+	// Path 是日志文件路径。留空则仅输出到标准输出(不写文件)。
+	Path string `yaml:"path"`
+	// Level 是日志级别: debug / info / warn / error(默认 info)。
+	Level string `yaml:"level"`
+	// MaxAgeDays 是日志保留天数,过期自动清理(默认 7)。
+	MaxAgeDays int `yaml:"max_age_days"`
+	// Console 为 true 时同时输出到控制台(默认 true)。
+	Console bool `yaml:"console"`
 }
 
 // UpstreamConfig 描述上游代理。
@@ -126,6 +141,12 @@ func Default() *Config {
 				"/var/lib/dnsmasq/dnsmasq.leases",
 			},
 		},
+		Log: LogConfig{
+			Path:       "/var/log/lanproxy-gateway/gateway.log",
+			Level:      "info",
+			MaxAgeDays: 7,
+			Console:    true,
+		},
 	}
 }
 
@@ -203,6 +224,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Web.Username == "" || c.Web.Password == "" {
 		return fmt.Errorf("web.username 与 web.password 不能为空")
+	}
+	switch c.Log.Level {
+	case "", "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("log.level 必须为 debug/info/warn/error, 当前为 %q", c.Log.Level)
+	}
+	if c.Log.MaxAgeDays < 0 {
+		return fmt.Errorf("log.max_age_days 不能为负数")
 	}
 	return nil
 }

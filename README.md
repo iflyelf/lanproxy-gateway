@@ -125,6 +125,27 @@ docker compose up -d
 | `web.listen` | WebUI 监听地址,建议绑定 LAN 网段 |
 | `web.username` / `web.password` | 登录凭据(明文或 `$2` 开头的 bcrypt 哈希) |
 | `device.dhcp_lease_files` | DHCP 租约文件路径,用于解析设备主机名 |
+| `log.path` | 日志文件路径,留空则仅控制台;按天切割为 `gateway-YYYY-MM-DD.log` |
+| `log.level` | 日志级别 `debug`/`info`/`warn`/`error`(默认 `info`) |
+| `log.max_age_days` | 日志保留天数,过期自动清理(默认 `7`,`0`=不清理) |
+| `log.console` | 是否同时输出到控制台(默认 `true`) |
+
+## 日志
+
+日志支持按天切割与自动清理:
+
+- **文件路径**:`log.path` 指定基础路径(如 `/var/log/lanproxy-gateway/gateway.log`),实际写入带日期后缀的文件 `gateway-2026-09-02.log`,并维护软链 `gateway.log` 指向当天文件(便于 `tail -f`)。
+- **按天切割**:跨天时自动切换到新日期文件,无需重启。
+- **自动清理**:每次切割时删除超过 `max_age_days` 天的旧日志(默认保留 7 天)。
+- **级别控制**:低于 `level` 的日志不输出;`debug` 最详细,`error` 最少。
+- **双输出**:`console: true` 时同时写文件与标准输出(systemd 下可用 `journalctl` 查看)。
+
+```bash
+# 实时查看日志
+tail -f /var/log/lanproxy-gateway/gateway.log
+# 或通过 journal(console=true 时)
+journalctl -u lanproxy-gateway -f
+```
 
 ## 设备接入
 
