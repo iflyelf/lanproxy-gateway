@@ -64,6 +64,38 @@ func TestRenderNoIPv6ByDefault(t *testing.T) {
 	}
 }
 
+func TestRenderBlockQUIC(t *testing.T) {
+	m := New(Options{
+		ListenPort:  12345,
+		FwMark:      1,
+		BypassCIDRs: []string{"10.0.0.0/8"},
+		BlockQUIC:   true,
+	})
+	out, err := m.render()
+	if err != nil {
+		t.Fatalf("render 出错: %v", err)
+	}
+	for _, want := range []string{
+		"meta nfproto ipv4 udp dport 443 reject",
+		"meta nfproto ipv6 udp dport 443 reject",
+	} {
+		if !contains(out, want) {
+			t.Errorf("BlockQUIC 渲染结果缺少 %q\n完整内容:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderNoQUICByDefault(t *testing.T) {
+	m := New(Options{ListenPort: 1, FwMark: 1, BypassCIDRs: []string{"10.0.0.0/8"}})
+	out, err := m.render()
+	if err != nil {
+		t.Fatalf("render 出错: %v", err)
+	}
+	if contains(out, "udp dport 443") {
+		t.Errorf("未启用 BlockQUIC 时不应包含 QUIC 规则:\n%s", out)
+	}
+}
+
 func TestRenderNoIface(t *testing.T) {
 	m := New(Options{ListenPort: 1, FwMark: 1})
 	out, err := m.render()

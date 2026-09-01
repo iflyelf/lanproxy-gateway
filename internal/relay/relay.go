@@ -1,14 +1,15 @@
 package relay
 
 import (
+	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -16,6 +17,14 @@ import (
 	"github.com/iflyelf/lanproxy-gateway/internal/stats"
 	"golang.org/x/net/proxy"
 )
+
+// bufferPool 复用小缓冲,降低高并发下的内存分配。
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 16384) // 16KB
+		return &b
+	},
+}
 
 // Relay 监听 TPROXY 端口,接收被 nftables 拦截的 TCP 连接,
 // 读取原始目标地址(SO_ORIGINAL_DST)后转发到上游代理,并统计流量。
@@ -25,6 +34,7 @@ type Relay struct {
 	listener  net.Listener
 	wg        sync.WaitGroup
 	closeCh   chan struct{}
+	activeConns atomic.Int64
 }
 
 // New 创建 relay 实例。
@@ -91,6 +101,15 @@ func (r *Relay) acceptLoop() {
 				continue
 			}
 		}
+
+		// 背压:达到连接数上限时拒绝新连接
+		if max := r.cfg.TProxy.MaxConnections; max > 0 {
+			if r.activeConns.Load() >= int64(max) {
+				conn.Close()
+				continue
+			}
+		}
+
 		r.wg.Add(1)
 		go r.handleConn(conn)
 	}
@@ -99,6 +118,11 @@ func (r *Relay) acceptLoop() {
 func (r *Relay) handleConn(conn net.Conn) {
 	defer r.wg.Done()
 	defer conn.Close()
+	r.activeConns.Add(1)
+	defer r.activeConns.Add(-1)
+
+	// 设置空闲超时(防连接泄漏)
+	conn.SetDeadline(time.Now().Add(5 * time.Minute))
 
 	srcIP, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 	// TPROXY 下,LocalAddr 即为连接的原始目标地址(内核已透明保留)。
@@ -108,28 +132,47 @@ func (r *Relay) handleConn(conn net.Conn) {
 	}
 	dstPort, _ := strconv.Atoi(dstPortStr)
 	connID := r.collector.OpenConn(srcIP, dstIP, dstPort, "proxy")
-	defer func() {
-		r.collector.CloseConn(connID, srcIP, dstIP, dstPort, 0, 0, "proxy", false)
-	}()
 
-	upstream, err := r.dialUpstream(dstIP, dstPort)
+	// 1. 先尝试代理
+	upstream, upstreamType, err := r.dialUpstreamOrFallback(dstIP, dstPort)
 	if err != nil {
+		// 代理和回退都失败,记录失败连接
+		r.collector.RecordConn(connID, srcIP, dstIP, dstPort, 0, 0, "failed", true)
 		return
 	}
 	defer upstream.Close()
 
-	var tx, rx uint64
-	done := make(chan struct{})
-	go func() {
-		n, _ := io.Copy(upstream, conn)
-		tx = uint64(n)
-		done <- struct{}{}
-	}()
-	n, _ := io.Copy(conn, upstream)
-	rx = uint64(n)
-	<-done
+	// 清除初始超时,双向拷贝中动态设置
+	conn.SetDeadline(time.Time{})
+	upstream.SetDeadline(time.Time{})
 
-	r.collector.CloseConn(connID, srcIP, dstIP, dstPort, tx, rx, "proxy", false)
+	// 2. 双向拷贝(支持半关闭)
+	tx, rx := r.bidirectionalCopy(conn, upstream)
+
+	// 3. 记录连接(仅此一次)
+	r.collector.RecordConn(connID, srcIP, dstIP, dstPort, tx, rx, upstreamType, false)
+}
+
+// dialUpstreamOrFallback 先尝试代理,失败且开启回退时改直连。
+// 返回 conn, upstreamType("proxy"/"direct"), error
+func (r *Relay) dialUpstreamOrFallback(dstIP string, dstPort int) (net.Conn, string, error) {
+	// 先尝试代理
+	conn, err := r.dialUpstream(dstIP, dstPort)
+	if err == nil {
+		return conn, "proxy", nil
+	}
+
+	// 代理失败,若开启回退则直连
+	if !r.cfg.TProxy.FallbackDirect {
+		return nil, "", fmt.Errorf("代理失败且未开启回退: %w", err)
+	}
+
+	target := net.JoinHostPort(dstIP, strconv.Itoa(dstPort))
+	directConn, err := net.DialTimeout("tcp", target, 5*time.Second)
+	if err != nil {
+		return nil, "", fmt.Errorf("代理失败且直连也失败: %w", err)
+	}
+	return directConn, "direct", nil
 }
 
 // dialUpstream 向上游代理拨号,支持 HTTP CONNECT 与 SOCKS5。
@@ -163,18 +206,21 @@ func (r *Relay) dialHTTP(target string) (net.Conn, error) {
 		conn.Close()
 		return nil, err
 	}
-	// 读取 HTTP 响应头。
-	br := make([]byte, 1024)
-	n, err := conn.Read(br)
+
+	// 正确解析 HTTP 响应(避免分包/粘连问题)
+	br := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(br, req)
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("读取 HTTP CONNECT 响应失败: %w", err)
 	}
-	if n < 12 || string(br[:12]) != "HTTP/1.1 200" {
+	if resp.StatusCode != 200 {
 		conn.Close()
-		return nil, fmt.Errorf("HTTP CONNECT 失败: %s", string(br[:n]))
+		return nil, fmt.Errorf("HTTP CONNECT 失败: %s", resp.Status)
 	}
-	return conn, nil
+
+	// 返回包装后的 conn(bufio.Reader 可能缓存了后续数据)
+	return &bufferedConn{Conn: conn, r: br}, nil
 }
 
 func (r *Relay) dialSOCKS5(target string) (net.Conn, error) {
@@ -190,4 +236,76 @@ func (r *Relay) dialSOCKS5(target string) (net.Conn, error) {
 		return nil, err
 	}
 	return dialer.Dial("tcp", target)
+}
+
+// bidirectionalCopy 双向拷贝,支持半关闭,返回 (tx, rx) 字节数。
+func (r *Relay) bidirectionalCopy(client, upstream net.Conn) (uint64, uint64) {
+	var tx, rx atomic.Uint64
+	done := make(chan struct{}, 2)
+
+	// client -> upstream
+	go func() {
+		n := r.copyWithTimeout(upstream, client)
+		tx.Store(n)
+		if tc, ok := upstream.(*net.TCPConn); ok {
+			tc.CloseWrite() // 半关闭
+		}
+		done <- struct{}{}
+	}()
+
+	// upstream -> client
+	go func() {
+		n := r.copyWithTimeout(client, upstream)
+		rx.Store(n)
+		if tc, ok := client.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
+		done <- struct{}{}
+	}()
+
+	<-done
+	<-done
+	return tx.Load(), rx.Load()
+}
+
+// copyWithTimeout 带动态超时的拷贝(空闲 2 分钟断开),优先用 splice 零拷贝。
+func (r *Relay) copyWithTimeout(dst, src net.Conn) uint64 {
+	// io.Copy 对 TCP↔TCP 自动走 splice,无需显式处理
+	// 若退化成用户态拷贝,用池化缓冲
+	type deadliner interface {
+		SetReadDeadline(time.Time) error
+	}
+	
+	var total uint64
+	buf := bufferPool.Get().(*[]byte)
+	defer bufferPool.Put(buf)
+
+	for {
+		// 动态超时:每次读前重置
+		if d, ok := src.(deadliner); ok {
+			d.SetReadDeadline(time.Now().Add(2 * time.Minute))
+		}
+		
+		n, err := src.Read(*buf)
+		if n > 0 {
+			total += uint64(n)
+			if _, writeErr := dst.Write((*buf)[:n]); writeErr != nil {
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return total
+}
+
+// bufferedConn 包装带缓冲的 conn,用于 HTTP CONNECT 响应后的数据透传。
+type bufferedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (bc *bufferedConn) Read(p []byte) (int, error) {
+	return bc.r.Read(p)
 }

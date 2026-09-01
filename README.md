@@ -31,6 +31,9 @@
 - **仅接管 TCP**:UDP(含 QUIC)默认直连,DNS 由 smartdns 处理。
 - **不改内核、不动 iptables**:TPROXY 是主线内核标准 netfilter 功能,Ubuntu/Debian 自带。
 - **支持 IPv4 / IPv6**:开启 `tproxy.enable_ipv6` 后同时接管 IPv6 TCP 流量(IPv6 策略路由 + `ip6` TPROXY)。
+- **代理失败自动回退直连**:`fallback_direct` 开启时,clash 失败自动直连目标保障上网,恢复后新连接自动回到代理。
+- **1~2 万并发优化**:分片锁、缓冲池复用、半关闭处理、连接数背压,支持家庭到小型企业场景。
+- **实时流量可视化**:四主题 H5 WebUI,流量趋势曲线 + 力导向拓扑图,自适应移动端。
 
 ## 功能
 
@@ -116,6 +119,9 @@ docker compose up -d
 | `tproxy.bypass_cidrs` | 直连网段 IPv4(局域网/保留地址,不走代理) |
 | `tproxy.bypass_cidrs6` | 直连网段 IPv6(不走代理) |
 | `tproxy.enable_ipv6` | 是否同时接管 IPv6 TCP 流量(默认 `false`) |
+| `tproxy.fallback_direct` | 代理失败时自动回退直连(默认 `true`) |
+| `tproxy.block_quic` | 阻断 UDP/443 强制浏览器用 TCP(消除 YouTube 首次加载延迟,默认 `false`) |
+| `tproxy.max_connections` | 并发连接数上限,0=不限(默认 0,高负载场景可设 18000) |
 | `web.listen` | WebUI 监听地址,建议绑定 LAN 网段 |
 | `web.username` / `web.password` | 登录凭据(明文或 `$2` 开头的 bcrypt 哈希) |
 | `device.dhcp_lease_files` | DHCP 租约文件路径,用于解析设备主机名 |
@@ -134,6 +140,42 @@ docker compose up -d
 | 设备代理 | 无 / 不使用 |
 
 保存后重连网络即可。域名分流由 smartdns 完成,代理由 clash 完成,本网关负责透明转发与流量可视化。
+
+## WebUI 功能
+
+登录后 WebUI 分四个页面:
+
+| 页面 | 内容 |
+|---|---|
+| **网络总览** | 总流量/活动连接/设备数指标卡片、实时流量趋势曲线(5 分钟)、力导向流量拓扑(节点大小=连接数,连线粗细=流量,可拖拽) |
+| **设备与服务** | 设备流量排行:每设备上/下行、活动/累计连接、主机名、最近活动 |
+| **访问记录** | 最近连接记录,可按出口(代理/直连/失败)与源 IP 筛选 |
+| **设置** | 当前网络信息(CloudFlare/墙外出口 IP 与归属地)、外观主题切换、系统配置一览 |
+
+**四套主题**:暖沙米(默认)、经典浅色、石墨深色、海雾蓝。首次访问按系统深色偏好自动选择(暗→石墨深色 / 亮→暖沙米),手动切换后本地记忆。全部页面 H5 自适应,窄屏 Tab 转顶部横向滚动,表格横向滚动。
+
+## 回退直连与 QUIC 阻断
+
+- **回退直连**(`fallback_direct`,默认开):每条新连接优先走代理;clash 拨号失败时自动改为直连目标,保证上网不中断;clash 恢复后新连接自动回到代理。**无学习记忆**,始终优先代理。
+- **QUIC 阻断**(`block_quic`,默认关):开启后 `nft` 追加 `udp dport 443 reject`(IPv4+IPv6),强制浏览器从 QUIC 回退到 TCP 走代理,消除 YouTube 等首次加载延迟。副作用:拒绝所有设备 UDP/443,可能影响部分 P2P/WebRTC 应用,按需开启。
+
+## 高并发(1~2 万连接)
+
+本项目已针对 1~2 万并发连接做加固:统计层分片锁(64 桶)降低锁竞争、`sync.Pool` 缓冲池复用、TCP 半关闭正确处理、HTTP CONNECT 用 `http.ReadResponse` 严格解析、可选 `max_connections` 背压防雪崩。
+
+达到 1~2 万并发需宿主机系统调优(本项目不自动修改 sysctl):
+
+```bash
+# 扩大本地端口范围(relay→clash 单目标,受源端口数限制)
+sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+# 提升连接跟踪表与文件描述符上限
+sysctl -w net.netfilter.nf_conntrack_max=262144
+sysctl -w fs.file-max=1048576
+sysctl -w net.core.somaxconn=32768
+sysctl -w net.ipv4.tcp_tw_reuse=1
+```
+
+> 真实并发上限最终取决于上游 clash 单实例能力;本网关仅保证自身不成为瓶颈。
 
 ## 安全提示
 

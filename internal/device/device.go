@@ -9,12 +9,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 )
 
 // Scanner 定期扫描 ARP 表与 DHCP 租约,为设备 IP 补充主机名。
 type Scanner struct {
 	mu        sync.RWMutex
 	hostnames map[string]string // IP -> hostname
+	lastSeen  map[string]time.Time // IP -> 最后活跃时间(用于清理)
 
 	leaseFiles []string
 	interval   time.Duration
@@ -28,6 +32,7 @@ func New(leaseFiles []string, intervalSec int) *Scanner {
 	}
 	return &Scanner{
 		hostnames:  make(map[string]string),
+		lastSeen:   make(map[string]time.Time),
 		leaseFiles: leaseFiles,
 		interval:   time.Duration(intervalSec) * time.Second,
 		stopCh:     make(chan struct{}),
@@ -44,10 +49,18 @@ func (s *Scanner) Stop() {
 	close(s.stopCh)
 }
 
+// Hostname 返回指定 IP 的主机名,无则返回空串。
+func (s *Scanner) Hostname(ip string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hostnames[ip]
+}
+
 func (s *Scanner) scanLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
-	s.scan()
+	// 首次立即执行。
+	s.scan(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,63 +68,93 @@ func (s *Scanner) scanLoop(ctx context.Context) {
 		case <-s.stopCh:
 			return
 		case <-ticker.C:
-			s.scan()
+			s.scan(ctx)
 		}
 	}
 }
 
-func (s *Scanner) scan() {
-	ipHost := make(map[string]string)
+func (s *Scanner) scan(ctx context.Context) {
+	// 1. 从 DHCP 租约合并主机名。
+	merged := make(map[string]string)
+	for _, path := range s.leaseFiles {
+		for ip, host := range s.parseDHCPLeases(path) {
+			merged[ip] = host
+		}
+	}
 
-	// 1. 解析 ARP 表(ip neigh),提取 IP。
-	arpIPs := s.scanARP()
+	// 2. 从 ARP 表获取活跃 IP 列表。
+	arpIPs := s.parseARP()
+
+	// 3. 对未知主机名的 IP 并发反向 DNS(带超时、缓存、限并发)。
+	s.mu.RLock()
+	needResolve := []string{}
 	for _, ip := range arpIPs {
-		ipHost[ip] = ""
-	}
-
-	// 2. 解析 DHCP 租约文件,获取 hostname。
-	for _, lf := range s.leaseFiles {
-		leases := s.parseDHCPLeases(lf)
-		for ip, host := range leases {
-			if host != "" {
-				ipHost[ip] = host
+		if _, ok := merged[ip]; !ok {
+			if _, cached := s.hostnames[ip]; !cached {
+				needResolve = append(needResolve, ip)
 			}
+		}
+		s.lastSeen[ip] = time.Now()
+	}
+	s.mu.RUnlock()
+
+	// 并发反向 DNS(最多 32 并发,每次超时 1s)
+	if len(needResolve) > 0 {
+		resolved := s.batchReverseDNS(ctx, needResolve)
+		for ip, host := range resolved {
+			merged[ip] = host
 		}
 	}
 
-	// 3. 对无 hostname 的 IP 做反向 DNS 查询(可选,限时)。
-	for ip := range ipHost {
-		if ipHost[ip] == "" {
-			if names, err := net.LookupAddr(ip); err == nil && len(names) > 0 {
-				ipHost[ip] = strings.TrimSuffix(names[0], ".")
-			}
-		}
-	}
-
+	// 4. 更新缓存,清理离线设备(1小时未见)
 	s.mu.Lock()
-	s.hostnames = ipHost
+	for ip, host := range merged {
+		s.hostnames[ip] = host
+	}
+	cutoff := time.Now().Add(-1 * time.Hour)
+	for ip, t := range s.lastSeen {
+		if t.Before(cutoff) {
+			delete(s.hostnames, ip)
+			delete(s.lastSeen, ip)
+		}
+	}
 	s.mu.Unlock()
 }
 
-// Hostname 返回指定 IP 的主机名,无则返回空字符串。
-func (s *Scanner) Hostname(ip string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.hostnames[ip]
-}
+// batchReverseDNS 并发反向 DNS 查询,返回 IP -> hostname 映射。
+func (s *Scanner) batchReverseDNS(ctx context.Context, ips []string) map[string]string {
+	result := make(map[string]string)
+	mu := sync.Mutex{}
+	sem := semaphore.NewWeighted(32) // 最多 32 并发
+	g, gctx := errgroup.WithContext(ctx)
 
-// All 返回所有已知 IP -> hostname 映射。
-func (s *Scanner) All() map[string]string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cp := make(map[string]string, len(s.hostnames))
-	for k, v := range s.hostnames {
-		cp[k] = v
+	for _, ip := range ips {
+		ip := ip
+		g.Go(func() error {
+			if err := sem.Acquire(gctx, 1); err != nil {
+				return err
+			}
+			defer sem.Release(1)
+
+			// 每次查询超时 1s
+			lookupCtx, cancel := context.WithTimeout(gctx, 1*time.Second)
+			defer cancel()
+
+			names, err := net.DefaultResolver.LookupAddr(lookupCtx, ip)
+			if err == nil && len(names) > 0 {
+				host := strings.TrimSuffix(names[0], ".")
+				mu.Lock()
+				result[ip] = host
+				mu.Unlock()
+			}
+			return nil
+		})
 	}
-	return cp
+	g.Wait()
+	return result
 }
 
-func (s *Scanner) scanARP() []string {
+func (s *Scanner) parseARP() []string {
 	out, err := exec.Command("ip", "neigh", "show").Output()
 	if err != nil {
 		return nil

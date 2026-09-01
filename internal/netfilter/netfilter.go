@@ -18,6 +18,7 @@ type Manager struct {
 	bypass     []string
 	bypass6    []string
 	enableIPv6 bool
+	blockQUIC  bool
 	applied    bool
 }
 
@@ -29,6 +30,7 @@ type Options struct {
 	BypassCIDRs  []string // 直连网段(IPv4)
 	BypassCIDRs6 []string // 直连网段(IPv6)
 	EnableIPv6   bool     // 是否启用 IPv6 TPROXY
+	BlockQUIC    bool     // 是否阻断 UDP/443(强制浏览器回退 TCP)
 }
 
 // New 创建 netfilter 管理器。
@@ -41,6 +43,7 @@ func New(opts Options) *Manager {
 		bypass:     opts.BypassCIDRs,
 		bypass6:    opts.BypassCIDRs6,
 		enableIPv6: opts.EnableIPv6,
+		blockQUIC:  opts.BlockQUIC,
 	}
 }
 
@@ -52,6 +55,7 @@ func New(opts Options) *Manager {
 //   - 其余 TCP 使用 tproxy 重定向到本机 relay,并打 fwmark,配合策略路由回流到 lo。
 //   - hook 优先级使用 mangle(-150),在 nat 之前,且不与 firewalld 的 filter/nat 表冲突。
 //   - IPv6 支持:当 EnableIPv6=true 时,同时处理 IPv6 TCP 流量。
+//   - QUIC 阻断:当 BlockQUIC=true 时,reject UDP/443 强制浏览器回退 TCP。
 const nftRulesetTemplate = `table inet {{.Table}} {
 	set bypass4 {
 		type ipv4_addr
@@ -76,6 +80,10 @@ const nftRulesetTemplate = `table inet {{.Table}} {
 		{{- if .LANIface}}
 		iifname != "{{.LANIface}}" return
 		{{- end}}
+		{{- if .BlockQUIC}}
+		meta nfproto ipv4 udp dport 443 reject
+		meta nfproto ipv6 udp dport 443 reject
+		{{- end}}
 		meta l4proto != tcp return
 		meta nfproto ipv4 ip daddr @bypass4 return
 		meta nfproto ipv4 tproxy ip to 127.0.0.1:{{.ListenPort}} meta mark set {{.FwMark}} accept
@@ -99,6 +107,7 @@ func (m *Manager) render() (string, error) {
 		ListenPort int
 		FwMark     int
 		EnableIPv6 bool
+		BlockQUIC  bool
 	}{
 		Table:      m.tableName,
 		Bypass:     strings.Join(m.bypass, ", "),
@@ -107,6 +116,7 @@ func (m *Manager) render() (string, error) {
 		ListenPort: m.listenPort,
 		FwMark:     m.fwMark,
 		EnableIPv6: m.enableIPv6,
+		BlockQUIC:  m.blockQUIC,
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {

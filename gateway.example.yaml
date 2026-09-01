@@ -24,6 +24,9 @@ tproxy:
         - ff00::/8
     tcp_only: true
     enable_ipv6: false
+    fallback_direct: true
+    block_quic: false
+    max_connections: 0
 web:
     listen: 0.0.0.0:8088
     username: admin

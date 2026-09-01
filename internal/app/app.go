@@ -61,6 +61,7 @@ func New(cfg *config.Config) (*App, error) {
 			BypassCIDRs:  cfg.TProxy.BypassCIDRs,
 			BypassCIDRs6: cfg.TProxy.BypassCIDRs6,
 			EnableIPv6:   cfg.TProxy.EnableIPv6,
+			BlockQUIC:    cfg.TProxy.BlockQUIC,
 		}),
 		relay:     relay.New(cfg, collector),
 		scanner:   scanner,
@@ -93,6 +94,9 @@ func (a *App) Run() error {
 
 	log.Println("启动设备扫描...")
 	a.scanner.Start(a.ctx)
+
+	log.Println("启动流量采样...")
+	go a.collector.StartSampling(a.ctx)
 
 	log.Printf("启动 WebUI: http://%s", a.cfg.Web.Listen)
 	errCh := make(chan error, 1)

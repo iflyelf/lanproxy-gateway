@@ -46,6 +46,7 @@ func (s *Server) Start() error {
 	mux.Handle("/api/status", s.auth.Middleware(http.HandlerFunc(s.handleStatus)))
 	mux.Handle("/api/devices", s.auth.Middleware(http.HandlerFunc(s.handleDevices)))
 	mux.Handle("/api/connections", s.auth.Middleware(http.HandlerFunc(s.handleConnections)))
+	mux.Handle("/api/traffic", s.auth.Middleware(http.HandlerFunc(s.handleTraffic)))
 
 	// 静态前端。
 	sub, err := fs.Sub(web.FS, "static")
@@ -102,20 +103,28 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // StatusResponse 是 /api/status 的返回结构。
 type StatusResponse struct {
-	UptimeSeconds int64        `json:"uptime_seconds"`
-	Upstream      string       `json:"upstream"`
-	UpstreamType  string       `json:"upstream_type"`
-	LANInterface  string       `json:"lan_interface"`
-	Totals        stats.Totals `json:"totals"`
+	UptimeSeconds  int64        `json:"uptime_seconds"`
+	Upstream       string       `json:"upstream"`
+	UpstreamType   string       `json:"upstream_type"`
+	LANInterface   string       `json:"lan_interface"`
+	FallbackDirect bool         `json:"fallback_direct"`
+	BlockQUIC      bool         `json:"block_quic"`
+	EnableIPv6     bool         `json:"enable_ipv6"`
+	MaxConnections int          `json:"max_connections"`
+	Totals         stats.Totals `json:"totals"`
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	resp := StatusResponse{
-		UptimeSeconds: int64(time.Since(s.startedAt).Seconds()),
-		Upstream:      s.cfg.Upstream.Address,
-		UpstreamType:  s.cfg.Upstream.Type,
-		LANInterface:  s.cfg.LANInterface,
-		Totals:        s.collector.Totals(),
+		UptimeSeconds:  int64(time.Since(s.startedAt).Seconds()),
+		Upstream:       s.cfg.Upstream.Address,
+		UpstreamType:   s.cfg.Upstream.Type,
+		LANInterface:   s.cfg.LANInterface,
+		FallbackDirect: s.cfg.TProxy.FallbackDirect,
+		BlockQUIC:      s.cfg.TProxy.BlockQUIC,
+		EnableIPv6:     s.cfg.TProxy.EnableIPv6,
+		MaxConnections: s.cfg.TProxy.MaxConnections,
+		Totals:         s.collector.Totals(),
 	}
 	writeJSON(w, resp)
 }
@@ -141,6 +150,11 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleConnections(w http.ResponseWriter, r *http.Request) {
 	recent := s.collector.Recent(200)
 	writeJSON(w, recent)
+}
+
+func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
+	samples := s.collector.TrafficSamples()
+	writeJSON(w, samples)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

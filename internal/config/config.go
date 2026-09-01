@@ -53,6 +53,12 @@ type TProxyConfig struct {
 	TCPOnly bool `yaml:"tcp_only"`
 	// EnableIPv6 为 true 时同时接管 IPv6 TCP 流量。
 	EnableIPv6 bool `yaml:"enable_ipv6"`
+	// FallbackDirect 为 true 时,代理失败自动回退直连(默认开启)。
+	FallbackDirect bool `yaml:"fallback_direct"`
+	// BlockQUIC 为 true 时阻断 UDP/443,强制浏览器用 TCP 走代理(消除首次加载延迟,默认关闭)。
+	BlockQUIC bool `yaml:"block_quic"`
+	// MaxConnections 是并发连接数上限,0 表示不限(默认 0)。达上限时新连接被拒绝。
+	MaxConnections int `yaml:"max_connections"`
 }
 
 // WebConfig 描述管理页面。
@@ -102,8 +108,11 @@ func Default() *Config {
 				"fe80::/10",
 				"ff00::/8",
 			},
-			TCPOnly:    true,
-			EnableIPv6: false,
+			TCPOnly:        true,
+			EnableIPv6:     false,
+			FallbackDirect: true,
+			BlockQUIC:      false,
+			MaxConnections: 0,
 		},
 		Web: WebConfig{
 			Listen:   "0.0.0.0:8088",
@@ -182,6 +191,9 @@ func (c *Config) Validate() error {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {
 			return fmt.Errorf("bypass_cidrs6 中存在非法网段 %q: %w", cidr, err)
 		}
+	}
+	if c.TProxy.MaxConnections < 0 {
+		return fmt.Errorf("tproxy.max_connections 不能为负数")
 	}
 	if c.Web.Listen == "" {
 		return fmt.Errorf("web.listen 不能为空")
