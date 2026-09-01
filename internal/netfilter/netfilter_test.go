@@ -16,7 +16,7 @@ func TestRender(t *testing.T) {
 	for _, want := range []string{
 		"table inet lanproxy_gw",
 		"iifname != \"eth0\" return",
-		"tproxy ip to 127.0.0.1:12345",
+		"meta l4proto tcp tproxy ip to 127.0.0.1:12345",
 		"meta mark set 1",
 		"10.0.0.0/8, 192.168.0.0/16",
 		"type filter hook prerouting priority mangle",
@@ -44,8 +44,8 @@ func TestRenderIPv6(t *testing.T) {
 		"set bypass6",
 		"type ipv6_addr",
 		"fc00::/7, fe80::/10",
-		"meta nfproto ipv6 ip6 daddr @bypass6 return",
-		"tproxy ip6 to [::1]:12345",
+		"ip6 daddr @bypass6 return",
+		"meta l4proto tcp tproxy ip6 to [::1]:12345",
 	} {
 		if !contains(out, want) {
 			t.Errorf("IPv6 渲染结果缺少 %q\n完整内容:\n%s", want, out)

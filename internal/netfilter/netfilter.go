@@ -85,11 +85,11 @@ const nftRulesetTemplate = `table inet {{.Table}} {
 		meta nfproto ipv6 udp dport 443 reject
 		{{- end}}
 		meta l4proto != tcp return
-		meta nfproto ipv4 ip daddr @bypass4 return
-		meta nfproto ipv4 tproxy ip to 127.0.0.1:{{.ListenPort}} meta mark set {{.FwMark}} accept
+		ip daddr @bypass4 return
+		meta l4proto tcp tproxy ip to 127.0.0.1:{{.ListenPort}} meta mark set {{.FwMark}} accept
 		{{- if .EnableIPv6}}
-		meta nfproto ipv6 ip6 daddr @bypass6 return
-		meta nfproto ipv6 tproxy ip6 to [::1]:{{.ListenPort}} meta mark set {{.FwMark}} accept
+		ip6 daddr @bypass6 return
+		meta l4proto tcp tproxy ip6 to [::1]:{{.ListenPort}} meta mark set {{.FwMark}} accept
 		{{- end}}
 	}
 }`
