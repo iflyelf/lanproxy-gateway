@@ -1,27 +1,70 @@
+# =============================================================================
+# lanproxy-gateway 单容器编排 (host 网络模式)
+#
+#   局域网透明代理网关 (nftables TPROXY, 支持 IPv4/IPv6, 不依赖 eBPF/iptables)。
+#   与宿主机已有的 smartdns(:53) 与 clash 容器(:7890) 协同工作:
+#     - smartdns  负责 DNS 解析与域名分流
+#     - clash     负责代理出口
+#     - 本网关    负责透明接管 LAN 转发的 TCP 流量并转交上游, 附带流量可视化
+#
+#   直接使用已构建镜像, 无需本地编译。
+#     启动: docker compose up -d
+#     更新: docker compose pull && docker compose up -d
+#     日志: docker logs -f lanproxy-gateway
+# =============================================================================
 services:
   lanproxy-gateway:
-    container_name: lanproxy-gateway
+    # 已构建好的镜像 (由 GitHub Action 多架构发布: amd64 / arm64)
     image: iflyelf/lanproxy-gateway:latest
+    # 容器名, 便于 docker exec / docker logs 直接引用
+    container_name: lanproxy-gateway
+    # 分配伪终端, 便于 docker exec 交互调试
+    tty: true
+    # 保持标准输入打开
+    stdin_open: true
+    # 容器异常退出或宿主重启后始终自动拉起
     restart: always
 
-    # 透明网关必须使用宿主机网络,才能接管 LAN 转发流量
+    # host 网络模式: 透明网关必须共享宿主机网络栈, 才能接管 LAN 转发流量
+    #   优点: 无需端口映射, WebUI/relay 直接监听宿主机地址
+    #   注意: WebUI 监听地址由 gateway.yaml 的 web.listen 控制, 建议绑定 LAN 网段
     network_mode: host
 
-    # TPROXY + 策略路由 + nftables 需要网络管理能力。
-    # 如需最小权限可去掉 privileged,仅保留 cap_add。
+    # 以 root 运行: 配置 nftables TPROXY 表与策略路由需要
+    user: root
+    # 特权模式 + 网络能力: TPROXY / 策略路由 / nftables 的前提
+    #   如需最小权限可去掉 privileged, 仅保留 cap_add
     privileged: true
     cap_add:
       - NET_ADMIN
       - NET_BIND_SERVICE
 
-    volumes:
-      # 配置文件(首次运行前先在宿主机准备好 gateway.yaml)
-      - ./gateway.yaml:/etc/lanproxy-gateway/gateway.yaml:rw
-      # DHCP 租约文件(可选,用于解析设备主机名)
-      - /var/lib/misc:/var/lib/misc:ro
-      # 同步时区
-      - /etc/localtime:/etc/localtime:ro
-
-    # 开启 IP 转发(容器内写 /proc 需要)
+    # 开启 IP 转发 (容器内接管转发流量需要, IPv4 + IPv6)
     sysctls:
       - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+
+    volumes:
+      # 配置文件 (首次运行前先在当前目录准备好 gateway.yaml)
+      - ./gateway.yaml:/etc/lanproxy-gateway/gateway.yaml:rw
+      # DHCP 租约文件 (可选, 用于解析设备主机名; 按实际 dnsmasq 路径调整)
+      - /var/lib/misc:/var/lib/misc:ro
+      # 与宿主机保持一致的时区
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+      - /etc/localtime:/etc/localtime:ro
+
+    healthcheck:
+      # 探测 WebUI 登录页 (未认证返回 200 的静态页面)
+      # 容器级自愈由 restart: always 兜底
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # 放宽进程数与文件描述符上限 (高并发代理场景)
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535

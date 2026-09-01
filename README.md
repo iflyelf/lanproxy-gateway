@@ -43,34 +43,59 @@
 
 ## 快速开始
 
+> 下载均通过 `https://down.xiaonuo.live?url=` 代理加速,`wget` 支持断点续传(`-c`)。
+> 按需把 `amd64` 换成 `arm64`。
+
 ### 方式一:systemd(推荐,直接跑在宿主机)
 
 ```bash
-# 1. 下载二进制(或用源码 make build)
-curl -fsSL https://github.com/iflyelf/lanproxy-gateway/releases/latest/download/lanproxy-gateway-linux-amd64.tar.gz | tar xz
-sudo install lanproxy-gateway-linux-amd64 /usr/local/bin/lanproxy-gateway
+# 1. 下载二进制到 /tmp 并解压
+wget -q -c --no-check-certificate -O /tmp/lanproxy-gateway.tar.gz \
+  "https://down.xiaonuo.live?url=https://github.com/iflyelf/lanproxy-gateway/releases/latest/download/lanproxy-gateway-linux-amd64.tar.gz"
+tar -xzf /tmp/lanproxy-gateway.tar.gz -C /tmp
 
-# 2. 生成默认配置
+# 2. 替换二进制(mv -f 原子覆盖)
+sudo mv -f /tmp/lanproxy-gateway-linux-amd64 /usr/local/bin/lanproxy-gateway
+sudo chmod +x /usr/local/bin/lanproxy-gateway
+
+# 3. 生成默认配置
 sudo lanproxy-gateway config init
 
-# 3. 编辑配置(务必修改 web 用户名/密码,确认 upstream 指向 clash)
+# 4. 编辑配置(务必修改 web 用户名/密码,确认 upstream 指向 clash)
 sudo vi /etc/lanproxy-gateway/gateway.yaml
 
-# 4. 安装 systemd 服务
-sudo cp deploy/systemd/lanproxy-gateway.service /etc/systemd/system/
+# 5. 下载 systemd 单元到 /tmp 再替换
+wget -q -c --no-check-certificate -O /tmp/lanproxy-gateway.service \
+  "https://down.xiaonuo.live?url=https://raw.githubusercontent.com/iflyelf/lanproxy-gateway/main/deploy/systemd/lanproxy-gateway.service"
+sudo mv -f /tmp/lanproxy-gateway.service /etc/systemd/system/lanproxy-gateway.service
+
+# 6. 启动服务
 sudo systemctl daemon-reload
 sudo systemctl enable --now lanproxy-gateway
 
-# 5. 查看状态与接入指引
+# 7. 查看状态与接入指引
 lanproxy-gateway status
 ```
 
 ### 方式二:Docker(host 网络 + 特权)
 
 ```bash
-cd deploy/docker
-cp ../../gateway.example.yaml ./gateway.yaml
-vi ./gateway.yaml          # 修改 web 凭据与 upstream
+# 1. 创建工作目录
+mkdir -p lanproxy-gateway && cd lanproxy-gateway
+
+# 2. 下载 docker-compose.yml 与配置模板到 /tmp 再替换
+wget -q -c --no-check-certificate -O /tmp/docker-compose.yml \
+  "https://down.xiaonuo.live?url=https://raw.githubusercontent.com/iflyelf/lanproxy-gateway/main/deploy/docker/docker-compose.yml"
+mv -f /tmp/docker-compose.yml ./docker-compose.yml
+
+wget -q -c --no-check-certificate -O /tmp/gateway.yaml \
+  "https://down.xiaonuo.live?url=https://raw.githubusercontent.com/iflyelf/lanproxy-gateway/main/gateway.example.yaml"
+mv -f /tmp/gateway.yaml ./gateway.yaml
+
+# 3. 修改 web 凭据与 upstream
+vi ./gateway.yaml
+
+# 4. 启动
 docker compose up -d
 ```
 
