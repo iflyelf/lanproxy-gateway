@@ -1,26 +1,73 @@
+# [unit]配置了服务的描述,规定了在network启动之后执行。
+# [service]配置服务的pid,服务的启动,停止,重启。
+# [install]配置了使用用户。
 [Unit]
-Description=LAN Proxy Gateway (nftables TPROXY transparent proxy)
+# 描述服务
+Description=LAN Proxy Gateway (nftables TPROXY 透明代理网关)
+# 项目文档地址
 Documentation=https://github.com/iflyelf/lanproxy-gateway
-After=network-online.target
+# 描述服务类别:在网络就绪、DNS 可用之后启动
+After=syslog.target network-online.target nss-lookup.target
+# 依赖网络在线目标(确保网卡已配置好地址)
 Wants=network-online.target
+# 禁用启动频率限制的时间窗口
+StartLimitIntervalSec=0
+# 禁用启动尝试的次数限制
+StartLimitBurst=0
 
 [Service]
+# 启动类型:启动主进程
 Type=simple
+# 启动当前服务的命令(前台运行守护进程,读取指定配置文件)
 ExecStart=/usr/local/bin/lanproxy-gateway run -c /etc/lanproxy-gateway/gateway.yaml
-ExecReload=/bin/kill -HUP $MAINPID
+# 重启当前服务时执行的命令(热加载)
+ExecReload=/bin/kill -s HUP $MAINPID
+# 停止当前服务时执行的命令(触发优雅退出并清理 nftables/路由)
+ExecStop=/bin/kill -s TERM $MAINPID
+# 启动服务用户
+User=root
+# 启动服务用户组
+Group=root
+# 停止所有进程
+KillMode=control-group
+# 强制终止的信号
+KillSignal=SIGTERM
+# 等待 30 秒后,强制终止(留足时间清理 nftables 规则与策略路由)
+TimeoutStopSec=30
+# 重启方式:仅在异常退出时重启
 Restart=on-failure
-RestartSec=5s
-TimeoutStopSec=30s
+# 重启需要等待的秒数
+RestartSec=5
+# 文件目录权限
+UMask=0022
+# 指定服务在系统日志中记录信息时使用的标识符
+SyslogIdentifier=lanproxy-gateway
+# 进程标准输出
+StandardOutput=journal
+# 进程标准错误
+StandardError=journal+console
 
-# 最小权限:仅授予网络管理能力(TPROXY + 策略路由)
+# ***** 权限与加固 *****
+# 最小权限:仅授予网络管理能力(TPROXY + 策略路由 + nftables)
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+# 禁止进程获取新的特权
 NoNewPrivileges=true
-
-# 系统加固
+# 使用独立的 /tmp 命名空间
 PrivateTmp=true
+# 以只读方式保护系统目录
 ProtectSystem=strict
+# 保护用户主目录不可访问
 ProtectHome=true
+# 允许写入的路径(配置目录)
 ReadWritePaths=/etc/lanproxy-gateway
 
+# ***** 资源限制 *****
+# 系统文件数限制
+TasksMax=infinity
+LimitCORE=infinity
+LimitNOFILE=infinity
+LimitNPROC=infinity
+
 [Install]
+# 表示该服务所在的Target
 WantedBy=multi-user.target
