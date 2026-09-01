@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f5efe6">
   <title>LAN Proxy Gateway</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -52,27 +53,31 @@
 
     <section class="panel">
       <h2>设备使用情况</h2>
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th>IP 地址</th><th>主机名</th><th>上行</th><th>下行</th>
-            <th>活动连接</th><th>累计连接</th><th>最近活动</th>
-          </tr>
-        </thead>
-        <tbody id="deviceRows"></tbody>
-      </table>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>IP 地址</th><th>主机名</th><th>上行</th><th>下行</th>
+              <th>活动连接</th><th>累计连接</th><th>最近活动</th>
+            </tr>
+          </thead>
+          <tbody id="deviceRows"></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="panel">
       <h2>最近连接</h2>
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th>源 IP</th><th>目标</th><th>出口</th><th>上行</th><th>下行</th><th>结束时间</th>
-          </tr>
-        </thead>
-        <tbody id="connRows"></tbody>
-      </table>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>源 IP</th><th>目标</th><th>出口</th><th>上行</th><th>下行</th><th>结束时间</th>
+            </tr>
+          </thead>
+          <tbody id="connRows"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 

@@ -1,67 +1,85 @@
 :root {
-  --bg: #0f1420;
-  --panel: #171e2e;
-  --card: #1d2740;
-  --accent: #4f8cff;
-  --text: #e6ebf5;
-  --muted: #8794ad;
-  --border: #263148;
-  --ok: #34d399;
-  --err: #f87171;
+  /* 暖米色主题 */
+  --bg: #f5efe6;
+  --bg-grad: linear-gradient(160deg, #f7f2ea 0%, #efe6d8 100%);
+  --panel: #fffaf3;
+  --card: #fdf8f0;
+  --accent: #c8865a;
+  --accent-soft: #e0a878;
+  --text: #4a3f35;
+  --muted: #9a8c7c;
+  --border: #e6dccd;
+  --ok: #83a76f;
+  --err: #d9776c;
+  --shadow: 0 4px 20px rgba(120, 95, 65, 0.08);
+  --shadow-hover: 0 6px 24px rgba(120, 95, 65, 0.14);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
-  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", Segoe UI, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   background: var(--bg);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
   color: var(--text);
   min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 .hidden { display: none !important; }
 
-/* 登录页 */
+/* ============ 登录页 ============ */
 .login-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  padding: 20px;
 }
 .login-card {
   background: var(--panel);
-  padding: 40px 36px;
-  border-radius: 14px;
-  width: 340px;
+  padding: 44px 38px;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
-.login-card h1 { font-size: 20px; text-align: center; }
-.login-card .sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.login-card h1 { font-size: 22px; text-align: center; color: var(--text); }
+.login-card .sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
 .login-card input {
-  background: var(--bg);
+  background: #fffdf9;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 11px 13px;
+  border-radius: 10px;
+  padding: 12px 14px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
+  transition: border-color 0.2s;
 }
 .login-card input:focus { outline: none; border-color: var(--accent); }
 .login-card button {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 8px;
-  padding: 11px;
+  border-radius: 10px;
+  padding: 12px;
   font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.2s;
 }
-.login-card button:hover { opacity: 0.9; }
+.login-card button:hover { background: var(--accent-soft); }
+.login-card button:active { transform: translateY(1px); }
 .err { color: var(--err); font-size: 13px; text-align: center; min-height: 18px; }
 
-/* 主界面 */
+/* ============ 顶栏 ============ */
 .topbar {
   display: flex;
   align-items: center;
@@ -69,63 +87,90 @@ body {
   padding: 16px 28px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-.brand { font-size: 17px; font-weight: 600; }
-.topbar-right { display: flex; align-items: center; gap: 16px; }
+.brand { font-size: 18px; font-weight: 700; color: var(--text); }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
 .uptime { color: var(--muted); font-size: 13px; }
 .btn-ghost {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 6px 14px;
-  border-radius: 7px;
+  padding: 7px 15px;
+  border-radius: 9px;
   cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
 }
-.btn-ghost:hover { border-color: var(--accent); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ============ 指标卡片 ============ */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 16px;
   padding: 24px 28px;
 }
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 20px;
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s, transform 0.2s;
 }
-.card-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-.card-value { font-size: 26px; font-weight: 600; }
-.card-value.small { font-size: 16px; }
+.card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+.card-label { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.card-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+.card-value.small { font-size: 16px; color: var(--text); }
 
+/* ============ 面板与表格 ============ */
 .panel {
   margin: 0 28px 24px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 24px;
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
 }
-.panel h2 { font-size: 15px; margin-bottom: 14px; font-weight: 600; }
+.panel h2 { font-size: 16px; margin-bottom: 16px; font-weight: 600; color: var(--text); }
 
-.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
 .tbl th {
   text-align: left;
   color: var(--muted);
-  font-weight: 500;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
 }
 .tbl td {
-  padding: 9px 10px;
-  border-bottom: 1px solid rgba(38,49,72,0.5);
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
-.tbl tr:hover td { background: rgba(79,140,255,0.05); }
+.tbl tr:hover td { background: rgba(200, 134, 90, 0.06); }
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 5px;
+  padding: 3px 10px;
+  border-radius: 6px;
   font-size: 12px;
+  font-weight: 500;
 }
-.badge.proxy { background: rgba(79,140,255,0.18); color: var(--accent); }
-.badge.direct { background: rgba(52,211,153,0.15); color: var(--ok); }
+.badge.proxy { background: rgba(200, 134, 90, 0.16); color: var(--accent); }
+.badge.direct { background: rgba(131, 167, 111, 0.18); color: var(--ok); }
+
+/* ============ 移动端自适应 ============ */
+@media (max-width: 640px) {
+  .topbar { padding: 14px 16px; }
+  .brand { font-size: 16px; }
+  .cards { padding: 16px; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .card { padding: 16px 18px; }
+  .card-value { font-size: 24px; }
+  .panel { margin: 0 16px 16px; padding: 18px 16px; }
+  .uptime { display: none; }
+}
