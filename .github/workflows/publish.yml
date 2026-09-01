@@ -4,44 +4,50 @@
 # Author: iflyelf
 #=================================================
 
-name: 发布版本
+name: 构建并发布(latest)
 
+# 推送到 main 或手动触发即构建, 二进制与镜像统一发布到 latest
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'web/**'
+      - '.github/workflows/publish.yml'
   workflow_dispatch:
     inputs:
-      tag:
-        description: '要发布的版本号(如 v0.1.0)'
+      build:
+        description: 'build lanproxy-gateway'
         required: true
-        default: 'v0.1.0'
+        default: 'build lanproxy-gateway'
+  watch:
+    types: [started]
 
 jobs:
-  # 编译多架构二进制并创建 GitHub Release
-  release-binaries:
+  # 编译多架构二进制并更新 latest Release
+  binaries:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: 安装 Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - name: 计算版本号
         id: ver
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "version=latest-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: 交叉编译
         env:
@@ -59,50 +65,51 @@ jobs:
             sha256sum "${f}.tar.gz" >> checksums.txt
           done
 
-      - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: 发布到 latest Release
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.ver.outputs.version }}
-          name: ${{ steps.ver.outputs.version }}
-          generate_release_notes: true
+          tag_name: latest
+          name: latest
+          prerelease: false
+          # 每次覆盖同名 latest Release 的资源
           files: |
             dist/*.tar.gz
             dist/checksums.txt
 
-  # 构建并推送带版本号的 Docker 镜像
-  release-image:
+  # 构建并推送镜像到 latest
+  image:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: 计算版本号
         id: ver
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "version=latest-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: 安装 QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: all
 
       - name: 安装 docker buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           version: latest
 
       - name: 登录 DockerHub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: 构建并推送镜像
-        uses: docker/build-push-action@v6
+      - name: 构建并推送镜像(仅 latest)
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -110,6 +117,11 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ steps.ver.outputs.version }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/lanproxy-gateway:latest
-            ${{ secrets.DOCKER_USERNAME }}/lanproxy-gateway:${{ steps.ver.outputs.version }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/lanproxy-gateway:latest
+
+      - name: 清理旧的 workflow 运行记录
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          repository: ${{ github.repository }}
+          retain_days: 1
+          keep_minimum_runs: 3

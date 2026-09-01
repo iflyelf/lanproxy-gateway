@@ -42,11 +42,14 @@ func (r *Relay) Start() error {
 		Control: func(network, address string, c syscall.RawConn) error {
 			var seterr error
 			if err := c.Control(func(fd uintptr) {
-				// IP_TRANSPARENT 允许绑定非本机 IP,是 TPROXY 工作的前提。
+				// IP_TRANSPARENT 允许绑定非本机 IP,是 TPROXY 工作的前提(IPv4)。
 				if err := syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_TRANSPARENT, 1); err != nil {
 					seterr = fmt.Errorf("setsockopt IP_TRANSPARENT: %w", err)
 					return
 				}
+				// IPV6_TRANSPARENT(SOL_IPV6=41, IPV6_TRANSPARENT=75)用于 IPv6 TPROXY。
+				// 双栈监听套接字上同时设置以支持 IPv6;不支持时忽略错误。
+				_ = syscall.SetsockoptInt(int(fd), 41, 75, 1)
 			}); err != nil {
 				return err
 			}
@@ -131,7 +134,7 @@ func (r *Relay) handleConn(conn net.Conn) {
 
 // dialUpstream 向上游代理拨号,支持 HTTP CONNECT 与 SOCKS5。
 func (r *Relay) dialUpstream(dstIP string, dstPort int) (net.Conn, error) {
-	target := fmt.Sprintf("%s:%d", dstIP, dstPort)
+	target := net.JoinHostPort(dstIP, strconv.Itoa(dstPort))
 	switch r.cfg.Upstream.Type {
 	case "http":
 		return r.dialHTTP(target)

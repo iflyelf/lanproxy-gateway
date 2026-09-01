@@ -1,7 +1,7 @@
 # LAN Proxy Gateway
 
 [![Release](https://img.shields.io/github/v/release/iflyelf/lanproxy-gateway)](https://github.com/iflyelf/lanproxy-gateway/releases/latest)
-[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/github/license/iflyelf/lanproxy-gateway)](LICENSE)
 
 把一台常驻的 Debian / Ubuntu 小主机变成局域网**透明代理网关**。局域网内的手机、电视、游戏机等设备无需安装任何代理 App,只需把**网关**和 **DNS** 指向这台主机,即可复用已有的 Clash / Mihomo 等代理。
@@ -30,6 +30,7 @@
 - **域名分流交给 smartdns**:设备的 DNS 指向本机 smartdns,由它完成解析与分流,网关只负责把 TCP 流量透明转发给 clash。
 - **仅接管 TCP**:UDP(含 QUIC)默认直连,DNS 由 smartdns 处理。
 - **不改内核、不动 iptables**:TPROXY 是主线内核标准 netfilter 功能,Ubuntu/Debian 自带。
+- **支持 IPv4 / IPv6**:开启 `tproxy.enable_ipv6` 后同时接管 IPv6 TCP 流量(IPv6 策略路由 + `ip6` TPROXY)。
 
 ## 功能
 
@@ -87,7 +88,9 @@ docker compose up -d
 | `tproxy.listen_port` | relay 的 TPROXY 监听端口(默认 12345) |
 | `tproxy.fwmark` | 打给被代理流量的 fwmark(默认 1) |
 | `tproxy.route_table` | 策略路由表编号(默认 100) |
-| `tproxy.bypass_cidrs` | 直连网段(局域网/保留地址,不走代理) |
+| `tproxy.bypass_cidrs` | 直连网段 IPv4(局域网/保留地址,不走代理) |
+| `tproxy.bypass_cidrs6` | 直连网段 IPv6(不走代理) |
+| `tproxy.enable_ipv6` | 是否同时接管 IPv6 TCP 流量(默认 `false`) |
 | `web.listen` | WebUI 监听地址,建议绑定 LAN 网段 |
 | `web.username` / `web.password` | 登录凭据(明文或 `$2` 开头的 bcrypt 哈希) |
 | `device.dhcp_lease_files` | DHCP 租约文件路径,用于解析设备主机名 |

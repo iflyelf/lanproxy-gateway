@@ -53,12 +53,14 @@ func New(cfg *config.Config) (*App, error) {
 
 	return &App{
 		cfg:       cfg,
-		route:     route.New(cfg.TProxy.FwMark, cfg.TProxy.RouteTable),
+		route:     route.New(cfg.TProxy.FwMark, cfg.TProxy.RouteTable, cfg.TProxy.EnableIPv6),
 		netfilter: netfilter.New(netfilter.Options{
-			ListenPort:  cfg.TProxy.ListenPort,
-			FwMark:      cfg.TProxy.FwMark,
-			LANIface:    cfg.LANInterface,
-			BypassCIDRs: cfg.TProxy.BypassCIDRs,
+			ListenPort:   cfg.TProxy.ListenPort,
+			FwMark:       cfg.TProxy.FwMark,
+			LANIface:     cfg.LANInterface,
+			BypassCIDRs:  cfg.TProxy.BypassCIDRs,
+			BypassCIDRs6: cfg.TProxy.BypassCIDRs6,
+			EnableIPv6:   cfg.TProxy.EnableIPv6,
 		}),
 		relay:     relay.New(cfg, collector),
 		scanner:   scanner,

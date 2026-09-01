@@ -12,19 +12,28 @@ import (
 type Manager struct {
 	fwMark     int
 	routeTable int
+	enableIPv6 bool
 
-	// forwardWasEnabled 记录进入前 ip_forward 是否已开启,用于恢复。
-	forwardWasEnabled bool
-	appliedForward    bool
-	appliedRule       bool
-	appliedRoute      bool
+	// forwardWasEnabled 记录进入前 IPv4 ip_forward 是否已开启,用于恢复。
+	forwardWasEnabled  bool
+	appliedForward     bool
+	forward6WasEnabled bool
+	appliedForward6    bool
+
+	appliedRule   bool
+	appliedRoute  bool
+	appliedRule6  bool
+	appliedRoute6 bool
 }
 
-const ipForwardPath = "/proc/sys/net/ipv4/ip_forward"
+const (
+	ipForwardPath  = "/proc/sys/net/ipv4/ip_forward"
+	ipForward6Path = "/proc/sys/net/ipv6/conf/all/forwarding"
+)
 
 // New 创建路由管理器。
-func New(fwMark, routeTable int) *Manager {
-	return &Manager{fwMark: fwMark, routeTable: routeTable}
+func New(fwMark, routeTable int, enableIPv6 bool) *Manager {
+	return &Manager{fwMark: fwMark, routeTable: routeTable, enableIPv6: enableIPv6}
 }
 
 // Setup 开启 IP 转发,并添加策略路由规则:
@@ -39,6 +48,17 @@ func (m *Manager) Setup() error {
 	}
 	if err := m.addRoute(); err != nil {
 		return err
+	}
+	if m.enableIPv6 {
+		if err := m.enableForward6(); err != nil {
+			return err
+		}
+		if err := m.addRule6(); err != nil {
+			return err
+		}
+		if err := m.addRoute6(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -56,6 +76,22 @@ func (m *Manager) enableForward() error {
 		return fmt.Errorf("开启 ip_forward 失败: %w", err)
 	}
 	m.appliedForward = true
+	return nil
+}
+
+func (m *Manager) enableForward6() error {
+	cur, err := os.ReadFile(ipForward6Path)
+	if err != nil {
+		return fmt.Errorf("读取 ipv6 forwarding 失败: %w", err)
+	}
+	m.forward6WasEnabled = strings.TrimSpace(string(cur)) == "1"
+	if m.forward6WasEnabled {
+		return nil
+	}
+	if err := os.WriteFile(ipForward6Path, []byte("1\n"), 0o644); err != nil {
+		return fmt.Errorf("开启 ipv6 forwarding 失败: %w", err)
+	}
+	m.appliedForward6 = true
 	return nil
 }
 
@@ -78,9 +114,37 @@ func (m *Manager) addRoute() error {
 	return nil
 }
 
+func (m *Manager) addRule6() error {
+	_ = run("ip", "-6", "rule", "del", "fwmark", fmt.Sprint(m.fwMark), "lookup", fmt.Sprint(m.routeTable))
+	if err := run("ip", "-6", "rule", "add", "fwmark", fmt.Sprint(m.fwMark), "lookup", fmt.Sprint(m.routeTable)); err != nil {
+		return fmt.Errorf("添加 ipv6 ip rule 失败: %w", err)
+	}
+	m.appliedRule6 = true
+	return nil
+}
+
+func (m *Manager) addRoute6() error {
+	_ = run("ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", fmt.Sprint(m.routeTable))
+	if err := run("ip", "-6", "route", "add", "local", "::/0", "dev", "lo", "table", fmt.Sprint(m.routeTable)); err != nil {
+		return fmt.Errorf("添加 ipv6 ip route 失败: %w", err)
+	}
+	m.appliedRoute6 = true
+	return nil
+}
+
 // Restore 撤销由 Setup 施加的所有更改。尽力而为,收集所有错误。
 func (m *Manager) Restore() error {
 	var errs []string
+	if m.appliedRoute6 {
+		if err := run("ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", fmt.Sprint(m.routeTable)); err != nil {
+			errs = append(errs, fmt.Sprintf("删除 ipv6 ip route: %v", err))
+		}
+	}
+	if m.appliedRule6 {
+		if err := run("ip", "-6", "rule", "del", "fwmark", fmt.Sprint(m.fwMark), "lookup", fmt.Sprint(m.routeTable)); err != nil {
+			errs = append(errs, fmt.Sprintf("删除 ipv6 ip rule: %v", err))
+		}
+	}
 	if m.appliedRoute {
 		if err := run("ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", fmt.Sprint(m.routeTable)); err != nil {
 			errs = append(errs, fmt.Sprintf("删除 ip route: %v", err))
@@ -89,6 +153,11 @@ func (m *Manager) Restore() error {
 	if m.appliedRule {
 		if err := run("ip", "rule", "del", "fwmark", fmt.Sprint(m.fwMark), "lookup", fmt.Sprint(m.routeTable)); err != nil {
 			errs = append(errs, fmt.Sprintf("删除 ip rule: %v", err))
+		}
+	}
+	if m.appliedForward6 && !m.forward6WasEnabled {
+		if err := os.WriteFile(ipForward6Path, []byte("0\n"), 0o644); err != nil {
+			errs = append(errs, fmt.Sprintf("恢复 ipv6 forwarding: %v", err))
 		}
 	}
 	if m.appliedForward && !m.forwardWasEnabled {

@@ -17,7 +17,13 @@ tproxy:
         - 192.168.0.0/16
         - 224.0.0.0/4
         - 240.0.0.0/4
+    bypass_cidrs6:
+        - ::1/128
+        - fc00::/7
+        - fe80::/10
+        - ff00::/8
     tcp_only: true
+    enable_ipv6: false
 web:
     listen: 0.0.0.0:8088
     username: admin

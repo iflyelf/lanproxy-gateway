@@ -16,15 +16,19 @@ type Manager struct {
 	fwMark     int
 	lanIface   string
 	bypass     []string
+	bypass6    []string
+	enableIPv6 bool
 	applied    bool
 }
 
 // Options 是构建 nftables 规则所需参数。
 type Options struct {
-	ListenPort  int      // TPROXY relay 监听端口
-	FwMark      int      // 打给被代理流量的 fwmark
-	LANIface    string   // 面向局域网的网卡
-	BypassCIDRs []string // 直连网段
+	ListenPort   int      // TPROXY relay 监听端口
+	FwMark       int      // 打给被代理流量的 fwmark
+	LANIface     string   // 面向局域网的网卡
+	BypassCIDRs  []string // 直连网段(IPv4)
+	BypassCIDRs6 []string // 直连网段(IPv6)
+	EnableIPv6   bool     // 是否启用 IPv6 TPROXY
 }
 
 // New 创建 netfilter 管理器。
@@ -35,6 +39,8 @@ func New(opts Options) *Manager {
 		fwMark:     opts.FwMark,
 		lanIface:   opts.LANIface,
 		bypass:     opts.BypassCIDRs,
+		bypass6:    opts.BypassCIDRs6,
+		enableIPv6: opts.EnableIPv6,
 	}
 }
 
@@ -45,6 +51,7 @@ func New(opts Options) *Manager {
 //   - 目的地址命中 bypass 集合(局域网/保留地址)时直接 return,走正常转发(直连)。
 //   - 其余 TCP 使用 tproxy 重定向到本机 relay,并打 fwmark,配合策略路由回流到 lo。
 //   - hook 优先级使用 mangle(-150),在 nat 之前,且不与 firewalld 的 filter/nat 表冲突。
+//   - IPv6 支持:当 EnableIPv6=true 时,同时处理 IPv6 TCP 流量。
 const nftRulesetTemplate = `table inet {{.Table}} {
 	set bypass4 {
 		type ipv4_addr
@@ -53,6 +60,16 @@ const nftRulesetTemplate = `table inet {{.Table}} {
 		elements = { {{.Bypass}} }
 		{{- end}}
 	}
+	{{- if .EnableIPv6}}
+
+	set bypass6 {
+		type ipv6_addr
+		flags interval
+		{{- if .Bypass6}}
+		elements = { {{.Bypass6}} }
+		{{- end}}
+	}
+	{{- end}}
 
 	chain prerouting {
 		type filter hook prerouting priority mangle; policy accept;
@@ -60,8 +77,12 @@ const nftRulesetTemplate = `table inet {{.Table}} {
 		iifname != "{{.LANIface}}" return
 		{{- end}}
 		meta l4proto != tcp return
-		ip daddr @bypass4 return
-		meta l4proto tcp tproxy ip to 127.0.0.1:{{.ListenPort}} meta mark set {{.FwMark}} accept
+		meta nfproto ipv4 ip daddr @bypass4 return
+		meta nfproto ipv4 tproxy ip to 127.0.0.1:{{.ListenPort}} meta mark set {{.FwMark}} accept
+		{{- if .EnableIPv6}}
+		meta nfproto ipv6 ip6 daddr @bypass6 return
+		meta nfproto ipv6 tproxy ip6 to [::1]:{{.ListenPort}} meta mark set {{.FwMark}} accept
+		{{- end}}
 	}
 }`
 
@@ -73,15 +94,19 @@ func (m *Manager) render() (string, error) {
 	data := struct {
 		Table      string
 		Bypass     string
+		Bypass6    string
 		LANIface   string
 		ListenPort int
 		FwMark     int
+		EnableIPv6 bool
 	}{
 		Table:      m.tableName,
 		Bypass:     strings.Join(m.bypass, ", "),
+		Bypass6:    strings.Join(m.bypass6, ", "),
 		LANIface:   m.lanIface,
 		ListenPort: m.listenPort,
 		FwMark:     m.fwMark,
+		EnableIPv6: m.enableIPv6,
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {

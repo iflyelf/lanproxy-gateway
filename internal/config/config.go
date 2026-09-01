@@ -45,10 +45,14 @@ type TProxyConfig struct {
 	FwMark int `yaml:"fwmark"`
 	// RouteTable 是策略路由使用的路由表编号。
 	RouteTable int `yaml:"route_table"`
-	// BypassCIDRs 是直连(不走代理)的目标网段,通常包含局域网与保留地址。
+	// BypassCIDRs 是直连(不走代理)的目标网段(IPv4),通常包含局域网与保留地址。
 	BypassCIDRs []string `yaml:"bypass_cidrs"`
+	// BypassCIDRs6 是直连(不走代理)的目标网段(IPv6)。
+	BypassCIDRs6 []string `yaml:"bypass_cidrs6"`
 	// TCPOnly 为 true 时仅接管 TCP(默认)。UDP 交由 smartdns/直连处理。
 	TCPOnly bool `yaml:"tcp_only"`
+	// EnableIPv6 为 true 时同时接管 IPv6 TCP 流量。
+	EnableIPv6 bool `yaml:"enable_ipv6"`
 }
 
 // WebConfig 描述管理页面。
@@ -92,7 +96,14 @@ func Default() *Config {
 				"224.0.0.0/4",
 				"240.0.0.0/4",
 			},
-			TCPOnly: true,
+			BypassCIDRs6: []string{
+				"::1/128",
+				"fc00::/7",
+				"fe80::/10",
+				"ff00::/8",
+			},
+			TCPOnly:    true,
+			EnableIPv6: false,
 		},
 		Web: WebConfig{
 			Listen:   "0.0.0.0:8088",
@@ -165,6 +176,11 @@ func (c *Config) Validate() error {
 	for _, cidr := range c.TProxy.BypassCIDRs {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {
 			return fmt.Errorf("bypass_cidrs 中存在非法网段 %q: %w", cidr, err)
+		}
+	}
+	for _, cidr := range c.TProxy.BypassCIDRs6 {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("bypass_cidrs6 中存在非法网段 %q: %w", cidr, err)
 		}
 	}
 	if c.Web.Listen == "" {
