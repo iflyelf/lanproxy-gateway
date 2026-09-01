@@ -54,13 +54,25 @@ func runCmd() *cobra.Command {
 
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-			go func() {
-				<-sigCh
-				a.Stop()
-			}()
 
 			log.Printf("lanproxy-gateway %s 启动中...", version)
-			return a.Run()
+
+			// Run 在独立协程中执行,主协程等待信号或运行错误。
+			// 收到信号后同步执行 Stop(),确保 nftables/策略路由清理完成再退出,
+			// 避免 cancel 导致 Run 提前返回、进程被杀而残留系统规则。
+			runErr := make(chan error, 1)
+			go func() { runErr <- a.Run() }()
+
+			select {
+			case sig := <-sigCh:
+				log.Printf("收到信号 %v,开始清理...", sig)
+				a.Stop()
+				return nil
+			case err := <-runErr:
+				// 运行异常退出时同样清理已施加的系统状态。
+				a.Stop()
+				return err
+			}
 		},
 	}
 }
