@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAN Proxy Gateway</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login" class="login-wrap hidden">
+    <form id="loginForm" class="login-card">
+      <h1>LAN Proxy Gateway</h1>
+      <p class="sub">局域网透明代理网关</p>
+      <input id="username" type="text" placeholder="用户名" autocomplete="username" required>
+      <input id="password" type="password" placeholder="密码" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+      <div id="loginErr" class="err"></div>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">LAN Proxy Gateway</div>
+      <div class="topbar-right">
+        <span id="uptime" class="uptime"></span>
+        <button id="logout" class="btn-ghost">登出</button>
+      </div>
+    </header>
+
+    <section class="cards">
+      <div class="card">
+        <div class="card-label">在线设备</div>
+        <div id="mDevices" class="card-value">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">活动连接</div>
+        <div id="mActive" class="card-value">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">上行流量</div>
+        <div id="mTx" class="card-value">0 B</div>
+      </div>
+      <div class="card">
+        <div class="card-label">下行流量</div>
+        <div id="mRx" class="card-value">0 B</div>
+      </div>
+      <div class="card">
+        <div class="card-label">上游代理</div>
+        <div id="mUpstream" class="card-value small">-</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>设备使用情况</h2>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>IP 地址</th><th>主机名</th><th>上行</th><th>下行</th>
+            <th>活动连接</th><th>累计连接</th><th>最近活动</th>
+          </tr>
+        </thead>
+        <tbody id="deviceRows"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>最近连接</h2>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>源 IP</th><th>目标</th><th>出口</th><th>上行</th><th>下行</th><th>结束时间</th>
+          </tr>
+        </thead>
+        <tbody id="connRows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

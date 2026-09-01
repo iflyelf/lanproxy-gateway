@@ -1,0 +1,26 @@
+[Unit]
+Description=LAN Proxy Gateway (nftables TPROXY transparent proxy)
+Documentation=https://github.com/iflyelf/lanproxy-gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lanproxy-gateway run -c /etc/lanproxy-gateway/gateway.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+# 最小权限:仅授予网络管理能力(TPROXY + 策略路由)
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# 系统加固
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/lanproxy-gateway
+
+[Install]
+WantedBy=multi-user.target

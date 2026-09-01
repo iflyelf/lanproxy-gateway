@@ -1,0 +1,30 @@
+lan_interface: ""
+upstream:
+    type: http
+    address: 127.0.0.1:7890
+    username: ""
+    password: ""
+tproxy:
+    listen_port: 12345
+    fwmark: 1
+    route_table: 100
+    bypass_cidrs:
+        - 0.0.0.0/8
+        - 10.0.0.0/8
+        - 127.0.0.0/8
+        - 169.254.0.0/16
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 224.0.0.0/4
+        - 240.0.0.0/4
+    tcp_only: true
+web:
+    listen: 0.0.0.0:8088
+    username: admin
+    password: admin
+    session_secret: ""
+device:
+    scan_interval_seconds: 10
+    dhcp_lease_files:
+        - /var/lib/misc/dnsmasq.leases
+        - /var/lib/dnsmasq/dnsmasq.leases

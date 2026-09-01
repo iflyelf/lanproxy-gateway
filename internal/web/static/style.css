@@ -1,0 +1,131 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171e2e;
+  --card: #1d2740;
+  --accent: #4f8cff;
+  --text: #e6ebf5;
+  --muted: #8794ad;
+  --border: #263148;
+  --ok: #34d399;
+  --err: #f87171;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", Segoe UI, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.hidden { display: none !important; }
+
+/* 登录页 */
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.login-card {
+  background: var(--panel);
+  padding: 40px 36px;
+  border-radius: 14px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--border);
+}
+.login-card h1 { font-size: 20px; text-align: center; }
+.login-card .sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.login-card input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 13px;
+  color: var(--text);
+  font-size: 14px;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-card button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.login-card button:hover { opacity: 0.9; }
+.err { color: var(--err); font-size: 13px; text-align: center; min-height: 18px; }
+
+/* 主界面 */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-size: 17px; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.uptime { color: var(--muted); font-size: 13px; }
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--accent); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  padding: 24px 28px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+.card-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.card-value { font-size: 26px; font-weight: 600; }
+.card-value.small { font-size: 16px; }
+
+.panel {
+  margin: 0 28px 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.panel h2 { font-size: 15px; margin-bottom: 14px; font-weight: 600; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tbl td {
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(38,49,72,0.5);
+}
+.tbl tr:hover td { background: rgba(79,140,255,0.05); }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.badge.proxy { background: rgba(79,140,255,0.18); color: var(--accent); }
+.badge.direct { background: rgba(52,211,153,0.15); color: var(--ok); }
