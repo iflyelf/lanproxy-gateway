@@ -28,6 +28,7 @@
         <button class="tab active" data-page="overview">网络总览</button>
         <button class="tab" data-page="devices">设备与服务</button>
         <button class="tab" data-page="history">访问记录</button>
+        <button class="tab" data-page="logs">日志</button>
         <button class="tab" data-page="settings">设置</button>
       </nav>
       <div class="topbar-right">
@@ -126,6 +127,35 @@
           </table>
         </div>
         <div id="connEmpty" class="empty hidden">暂无连接记录</div>
+      </section>
+    </div>
+
+    <!-- 日志 -->
+    <div id="page-logs" class="page hidden">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>运行日志</h2>
+          <div class="filters">
+            <select id="logLevel">
+              <option value="">全部级别</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARN">WARN</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <select id="logLines">
+              <option value="200">最近 200 行</option>
+              <option value="500">最近 500 行</option>
+              <option value="1000">最近 1000 行</option>
+              <option value="2000">最近 2000 行</option>
+            </select>
+            <input id="logKeyword" type="text" placeholder="关键字过滤">
+            <button class="btn-ghost" id="logRefresh">刷新</button>
+            <label class="chk"><input type="checkbox" id="logAuto" checked> 自动刷新</label>
+          </div>
+        </div>
+        <div class="log-meta" id="logMeta">加载中...</div>
+        <pre class="log-view" id="logView"></pre>
       </section>
     </div>
 

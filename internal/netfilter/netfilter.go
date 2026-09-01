@@ -166,6 +166,20 @@ func (m *Manager) deleteTable() error {
 	return nil
 }
 
+// ForceClean 无条件删除本程序的 nft 表(用于清理 SIGKILL 后的残留)。
+// 表不存在时返回 nil(幂等)。
+func (m *Manager) ForceClean() error {
+	if _, err := exec.LookPath("nft"); err != nil {
+		return nil
+	}
+	// 表不存在时 nft 会报错,视为已清理。
+	cmd := exec.Command("nft", "list", "table", "inet", m.tableName)
+	if err := cmd.Run(); err != nil {
+		return nil // 表不存在
+	}
+	return m.deleteTable()
+}
+
 // Ruleset 返回渲染后的规则文本,便于调试与展示。
 func (m *Manager) Ruleset() (string, error) {
 	return m.render()

@@ -224,6 +224,45 @@ func (l *Logger) output(lv Level, msg string) {
 	}
 }
 
+// CurrentFile 返回当前日志文件的完整路径。未配置文件时返回空串。
+func (l *Logger) CurrentFile() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.dir == "" {
+		return ""
+	}
+	return l.fileNameFor(l.curDate)
+}
+
+// Tail 读取当前日志文件的最后 n 行。未配置文件时返回空。
+func (l *Logger) Tail(n int) ([]string, error) {
+	path := l.CurrentFile()
+	if path == "" {
+		return nil, nil
+	}
+	if n <= 0 {
+		n = 200
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines, nil
+}
+
+// CurrentFile 返回全局日志器的当前文件路径。
+func CurrentFile() string { return get().CurrentFile() }
+
+// Tail 读取全局日志器当前文件的最后 n 行。
+func Tail(n int) ([]string, error) { return get().Tail(n) }
+
 // Close 关闭底层文件。
 func (l *Logger) Close() error {
 	l.mu.Lock()

@@ -101,6 +101,52 @@ func TestNoCleanupWhenZero(t *testing.T) {
 	}
 }
 
+func TestTail(t *testing.T) {
+	dir := t.TempDir()
+	l, err := New(Options{Path: filepath.Join(dir, "gateway.log"), Level: LevelInfo, Console: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		l.Infof("line %d", i)
+	}
+	// 读最后 3 行
+	lines, err := l.Tail(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("期望 3 行,实际 %d", len(lines))
+	}
+	if !strings.Contains(lines[2], "line 9") {
+		t.Errorf("最后一行应含 'line 9',实际 %q", lines[2])
+	}
+	// 请求超过总数应返回全部
+	all, _ := l.Tail(100)
+	if len(all) != 10 {
+		t.Errorf("期望 10 行,实际 %d", len(all))
+	}
+	l.Close()
+}
+
+func TestCurrentFile(t *testing.T) {
+	dir := t.TempDir()
+	l, err := New(Options{Path: filepath.Join(dir, "gateway.log"), Level: LevelInfo, Console: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	date := time.Now().Format("2006-01-02")
+	if !strings.HasSuffix(l.CurrentFile(), "gateway-"+date+".log") {
+		t.Errorf("CurrentFile 应指向当天文件,实际 %q", l.CurrentFile())
+	}
+	// 无文件日志器返回空
+	l2, _ := New(Options{Level: LevelInfo})
+	if l2.CurrentFile() != "" {
+		t.Errorf("无文件日志器 CurrentFile 应为空,实际 %q", l2.CurrentFile())
+	}
+}
+
 func TestConsoleOnly(t *testing.T) {
 	// 无 Path 时应仅控制台,不报错
 	l, err := New(Options{Level: LevelInfo})

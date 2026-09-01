@@ -147,6 +147,23 @@ tail -f /var/log/lanproxy-gateway/gateway.log
 journalctl -u lanproxy-gateway -f
 ```
 
+也可直接在 WebUI 的「日志」页在线查看当天日志尾部(支持级别筛选与关键字过滤)。
+
+## 规则清理
+
+正常停止时(SIGTERM/SIGINT,含 `systemctl stop`、`docker stop`、Ctrl+C)会**自动清理** nftables 表与策略路由,恢复系统状态。已实测验证:
+
+- systemd:`systemctl stop` 清理干净
+- 容器:`docker stop` / `docker restart` 清理干净且重启幂等
+
+**例外**:进程被 `SIGKILL`(如 `kill -9`、`docker kill`、OOM)强杀时无法执行清理,会残留规则。此时用 `clean` 命令手动清理:
+
+```bash
+lanproxy-gateway clean -c /etc/lanproxy-gateway/gateway.yaml
+```
+
+`clean` 会删除本程序的 nft 表(`inet lanproxy_gw`)与对应 fwmark/路由表规则,幂等可重复执行。容器场景建议在 compose 中设置 `stop_grace_period: 30s` 以预留充足清理时间(仓库示例已配置)。
+
 ## 设备接入
 
 在每台需要走代理的设备上,手动设置静态网络(以本机 IP 为 `10.0.9.60` 为例):
@@ -164,13 +181,14 @@ journalctl -u lanproxy-gateway -f
 
 ## WebUI 功能
 
-登录后 WebUI 分四个页面:
+登录后 WebUI 分五个页面:
 
 | 页面 | 内容 |
 |---|---|
 | **网络总览** | 总流量/活动连接/设备数指标卡片、实时流量趋势曲线(5 分钟)、力导向流量拓扑(节点大小=连接数,连线粗细=流量,可拖拽) |
 | **设备与服务** | 设备流量排行:每设备上/下行、活动/累计连接、主机名、最近活动 |
 | **访问记录** | 最近连接记录,可按出口(代理/直连/失败)与源 IP 筛选 |
+| **日志** | 在线查看当天日志尾部,支持级别筛选、关键字过滤、行数选择、自动刷新(5s),方便远程排查 |
 | **设置** | 当前网络信息(CloudFlare/墙外出口 IP 与归属地)、外观主题切换、系统配置一览 |
 
 **四套主题**:暖沙米(默认)、经典浅色、石墨深色、海雾蓝。首次访问按系统深色偏好自动选择(暗→石墨深色 / 亮→暖沙米),手动切换后本地记忆。全部页面 H5 自适应,窄屏 Tab 转顶部横向滚动,表格横向滚动。

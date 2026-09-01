@@ -251,6 +251,29 @@ body {
 .legend .lg-tx { background: var(--chart-tx); }
 .legend .lg-rx { background: var(--chart-rx); }
 
+/* ============ 日志查看 ============ */
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.chk input { cursor: pointer; }
+.log-meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; word-break: break-all; }
+.log-view {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+.log-view .lv-debug { color: var(--muted); }
+.log-view .lv-info  { color: var(--text); }
+.log-view .lv-warn  { color: var(--warn); }
+.log-view .lv-error { color: var(--err); font-weight: 500; }
+
 /* ============ Canvas ============ */
 .canvas-box { width: 100%; position: relative; }
 canvas { width: 100%; display: block; border-radius: 10px; touch-action: none; }

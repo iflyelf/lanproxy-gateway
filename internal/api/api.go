@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/iflyelf/lanproxy-gateway/internal/auth"
 	"github.com/iflyelf/lanproxy-gateway/internal/config"
 	"github.com/iflyelf/lanproxy-gateway/internal/device"
+	"github.com/iflyelf/lanproxy-gateway/internal/logger"
 	"github.com/iflyelf/lanproxy-gateway/internal/stats"
 	"github.com/iflyelf/lanproxy-gateway/internal/web"
 )
@@ -47,6 +50,7 @@ func (s *Server) Start() error {
 	mux.Handle("/api/devices", s.auth.Middleware(http.HandlerFunc(s.handleDevices)))
 	mux.Handle("/api/connections", s.auth.Middleware(http.HandlerFunc(s.handleConnections)))
 	mux.Handle("/api/traffic", s.auth.Middleware(http.HandlerFunc(s.handleTraffic)))
+	mux.Handle("/api/logs", s.auth.Middleware(http.HandlerFunc(s.handleLogs)))
 
 	// 静态前端。
 	sub, err := fs.Sub(web.FS, "static")
@@ -155,6 +159,73 @@ func (s *Server) handleConnections(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
 	samples := s.collector.TrafficSamples()
 	writeJSON(w, samples)
+}
+
+// LogsResponse 是 /api/logs 的返回结构。
+type LogsResponse struct {
+	File    string   `json:"file"`     // 当前日志文件路径
+	Enabled bool     `json:"enabled"`  // 是否启用了文件日志
+	Lines   []string `json:"lines"`    // 日志行(从旧到新)
+	Level   string   `json:"level"`    // 当前配置的级别
+}
+
+// handleLogs 返回当天日志文件的尾部内容,便于远程排查。
+// 查询参数:
+//   lines  - 返回行数上限(默认 200,最大 2000)
+//   level  - 仅返回包含该级别标记的行(DEBUG/INFO/WARN/ERROR)
+//   q      - 关键字过滤(不区分大小写)
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if v := r.URL.Query().Get("lines"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+
+	// 先多读一些,过滤后再截断到 limit。
+	readN := limit
+	levelFilter := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level")))
+	keyword := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	if levelFilter != "" || keyword != "" {
+		readN = limit * 10
+		if readN > 20000 {
+			readN = 20000
+		}
+	}
+
+	lines, err := logger.Tail(readN)
+	if err != nil {
+		http.Error(w, "读取日志失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if levelFilter != "" || keyword != "" {
+		filtered := make([]string, 0, len(lines))
+		for _, ln := range lines {
+			if levelFilter != "" && !strings.Contains(ln, "["+levelFilter+"]") {
+				continue
+			}
+			if keyword != "" && !strings.Contains(strings.ToLower(ln), keyword) {
+				continue
+			}
+			filtered = append(filtered, ln)
+		}
+		lines = filtered
+	}
+	if len(lines) > limit {
+		lines = lines[len(lines)-limit:]
+	}
+
+	file := logger.CurrentFile()
+	writeJSON(w, LogsResponse{
+		File:    file,
+		Enabled: file != "",
+		Lines:   lines,
+		Level:   s.cfg.Log.Level,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

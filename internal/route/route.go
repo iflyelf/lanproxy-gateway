@@ -171,6 +171,20 @@ func (m *Manager) Restore() error {
 	return nil
 }
 
+// ForceClean 无条件删除本程序的策略路由规则与路由表内容
+// (用于清理 SIGKILL 后的残留)。尽力而为,忽略"不存在"类错误。
+// 不修改 ip_forward(无法判断原始状态)。
+func (m *Manager) ForceClean() {
+	fw := fmt.Sprint(m.fwMark)
+	tbl := fmt.Sprint(m.routeTable)
+	// IPv4
+	_ = run("ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", tbl)
+	_ = run("ip", "rule", "del", "fwmark", fw, "lookup", tbl)
+	// IPv6
+	_ = run("ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", tbl)
+	_ = run("ip", "-6", "rule", "del", "fwmark", fw, "lookup", tbl)
+}
+
 func run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.CombinedOutput()

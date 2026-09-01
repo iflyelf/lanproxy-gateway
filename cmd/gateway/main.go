@@ -9,6 +9,8 @@ import (
 	"github.com/iflyelf/lanproxy-gateway/internal/app"
 	"github.com/iflyelf/lanproxy-gateway/internal/config"
 	"github.com/iflyelf/lanproxy-gateway/internal/logger"
+	"github.com/iflyelf/lanproxy-gateway/internal/netfilter"
+	"github.com/iflyelf/lanproxy-gateway/internal/route"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +29,7 @@ func main() {
 	}
 	root.PersistentFlags().StringVarP(&cfgPath, "config", "c", "/etc/lanproxy-gateway/gateway.yaml", "配置文件路径")
 
-	root.AddCommand(runCmd(), statusCmd(), configCmd())
+	root.AddCommand(runCmd(), statusCmd(), configCmd(), cleanCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -109,6 +111,38 @@ func statusCmd() *cobra.Command {
 			fmt.Println("  网关   : 本机 LAN IP")
 			fmt.Println("  DNS    : 本机 LAN IP (由 smartdns 提供,端口 53)")
 			fmt.Println("  掩码   : 255.255.255.0")
+			return nil
+		},
+	}
+}
+
+// cleanCmd 清理残留的系统规则(用于进程被 SIGKILL 后手动清理)。
+func cleanCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clean",
+		Short: "清理残留的 nftables 表与策略路由(进程被强杀后使用)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Geteuid() != 0 {
+				return fmt.Errorf("需要 root 权限")
+			}
+			cfg, err := config.Load(cfgPath)
+			if err != nil {
+				return err
+			}
+			nf := netfilter.New(netfilter.Options{
+				ListenPort: cfg.TProxy.ListenPort,
+				FwMark:     cfg.TProxy.FwMark,
+				LANIface:   cfg.LANInterface,
+			})
+			if err := nf.ForceClean(); err != nil {
+				fmt.Printf("清理 nftables 出错: %v\n", err)
+			} else {
+				fmt.Println("已清理 nftables 表 inet lanproxy_gw")
+			}
+			rt := route.New(cfg.TProxy.FwMark, cfg.TProxy.RouteTable, cfg.TProxy.EnableIPv6)
+			rt.ForceClean()
+			fmt.Printf("已清理策略路由(fwmark %d / table %d)\n", cfg.TProxy.FwMark, cfg.TProxy.RouteTable)
+			fmt.Println("清理完成。")
 			return nil
 		},
 	}

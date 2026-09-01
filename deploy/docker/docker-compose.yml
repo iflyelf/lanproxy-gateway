@@ -24,6 +24,10 @@ services:
     stdin_open: true
     # 容器异常退出或宿主重启后始终自动拉起
     restart: always
+    # 停止时发送 SIGTERM 并预留 30s, 让网关完成 nftables/策略路由清理再退出
+    # (docker stop 默认 10s 足够, 这里放宽以防慢速环境)
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
 
     # host 网络模式: 透明网关必须共享宿主机网络栈, 才能接管 LAN 转发流量
     #   优点: 无需端口映射, WebUI/relay 直接监听宿主机地址

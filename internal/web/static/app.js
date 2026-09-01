@@ -61,6 +61,7 @@ function switchPage(name) {
   document.querySelectorAll('.page').forEach((p) => p.classList.add('hidden'));
   $('page-' + name).classList.remove('hidden');
   if (name === 'settings') loadNetworkInfo();
+  if (name === 'logs') loadLogs();
   // 切到总览时重算 canvas 尺寸
   if (name === 'overview') {
     setTimeout(() => {
@@ -243,6 +244,8 @@ async function fetchOuter() {
 /* ============ 初始化 ============ */
 initTheme();
 initTabs();
+setupLogControls();
+startLogAuto();
 checkAuth();
 
 /* ============ 流量曲线图 ============ */
@@ -521,3 +524,73 @@ class ForceTopology {
 
 window._trafficChart = new TrafficChart('trafficChart');
 window._topo = new ForceTopology('topoCanvas');
+
+/* ============ 日志查看 ============ */
+let logAutoTimer = null;
+
+async function loadLogs() {
+  const level = $('logLevel').value;
+  const lines = $('logLines').value;
+  const q = $('logKeyword').value.trim();
+  const params = new URLSearchParams({ lines });
+  if (level) params.set('level', level);
+  if (q) params.set('q', q);
+  try {
+    const resp = await fetch('/api/logs?' + params.toString());
+    if (!resp.ok) { $('logMeta').textContent = '读取日志失败'; return; }
+    const data = await resp.json();
+    renderLogs(data);
+  } catch (e) {
+    $('logMeta').textContent = '网络错误';
+  }
+}
+
+function renderLogs(data) {
+  const meta = $('logMeta');
+  if (!data.enabled) {
+    meta.textContent = '未启用文件日志(log.path 为空),仅控制台输出';
+    $('logView').innerHTML = '';
+    return;
+  }
+  meta.textContent = `文件: ${data.file}  ·  级别: ${(data.level||'info').toUpperCase()}  ·  共 ${data.lines.length} 行`;
+  const view = $('logView');
+  view.innerHTML = data.lines.map(escapeAndColor).join('\n');
+  // 滚动到底部
+  view.scrollTop = view.scrollHeight;
+}
+
+function escapeAndColor(line) {
+  const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let cls = '';
+  if (line.includes('[ERROR]')) cls = 'lv-error';
+  else if (line.includes('[WARN]')) cls = 'lv-warn';
+  else if (line.includes('[DEBUG]')) cls = 'lv-debug';
+  else if (line.includes('[INFO]')) cls = 'lv-info';
+  return cls ? `<span class="${cls}">${esc}</span>` : esc;
+}
+
+function setupLogControls() {
+  $('logRefresh').addEventListener('click', loadLogs);
+  $('logLevel').addEventListener('change', loadLogs);
+  $('logLines').addEventListener('change', loadLogs);
+  $('logKeyword').addEventListener('input', debounce(loadLogs, 400));
+  $('logAuto').addEventListener('change', (e) => {
+    if (e.target.checked) startLogAuto();
+    else stopLogAuto();
+  });
+}
+
+function startLogAuto() {
+  stopLogAuto();
+  logAutoTimer = setInterval(() => {
+    if (!$('page-logs').classList.contains('hidden')) loadLogs();
+  }, 5000);
+}
+function stopLogAuto() {
+  if (logAutoTimer) { clearInterval(logAutoTimer); logAutoTimer = null; }
+}
+
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
