@@ -4,8 +4,8 @@
 ARG GO_VERSION=1.25
 FROM golang:${GO_VERSION} AS builder
 
-# Go 模块代理(国内构建加速; 海外可改为 https://proxy.golang.org,direct)
-ARG GOPROXY=https://goproxy.cn,direct
+# Go 模块代理(默认官方源,适配 GitHub runner;国内构建可传入 goproxy.cn)
+ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=$GOPROXY
 ENV CGO_ENABLED=0
 
@@ -34,8 +34,8 @@ ARG TZ=Asia/Shanghai
 ENV TZ=$TZ
 
 # 运行期依赖: nftables 提供 nft, iproute2 提供 ip 命令
+# 使用默认 Ubuntu 源(GitHub runner 访问良好);国内构建可自行替换镜像源。
 RUN set -eux && \
-    sed -i 's@URIs: http://[a-z.]*\.ubuntu\.com/ubuntu/@URIs: https://mirrors.aliyun.com/ubuntu/@g' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true && \
     apt-get update -qqy && \
     apt-get install -qqy --no-install-recommends \
         nftables \
