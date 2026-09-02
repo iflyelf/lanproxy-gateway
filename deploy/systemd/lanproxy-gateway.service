@@ -58,8 +58,13 @@ PrivateTmp=true
 ProtectSystem=strict
 # 保护用户主目录不可访问
 ProtectHome=true
-# 允许写入的路径(配置目录)
-ReadWritePaths=/etc/lanproxy-gateway
+# 自动创建并授权日志目录 /var/log/lanproxy-gateway(随服务生命周期管理)
+LogsDirectory=lanproxy-gateway
+LogsDirectoryMode=0755
+# 允许写入的路径(配置目录 + 日志目录)
+# 注意: ProtectSystem=strict 下整个文件系统只读, 必须显式放行日志目录,
+# 否则日志初始化会报 "read-only file system"
+ReadWritePaths=/etc/lanproxy-gateway /var/log/lanproxy-gateway
 
 # ***** 资源限制 *****
 # 系统文件数限制
