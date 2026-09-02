@@ -117,6 +117,7 @@ $('logoutBtn').addEventListener('click', async () => {
 /* ============ 数据轮询 ============ */
 let pollTimer = null;
 let connFilter = { upstream: '', src: '' };
+let logAutoTimer = null;
 
 function startPolling() {
   if (pollTimer) return;
@@ -537,8 +538,6 @@ window._trafficChart = new TrafficChart('trafficChart');
 window._topo = new ForceTopology('topoCanvas');
 
 /* ============ 日志查看 ============ */
-let logAutoTimer = null;
-
 async function loadLogs() {
   const level = $('logLevel').value;
   const lines = $('logLines').value;
