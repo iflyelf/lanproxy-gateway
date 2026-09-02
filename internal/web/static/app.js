@@ -171,16 +171,73 @@ function renderDevices(devs) {
   devs = devs || [];
   const tbody = $('deviceRows');
   $('deviceEmpty').classList.toggle('hidden', devs.length > 0);
+  
+  // 避免刷新正在编辑的备注(检查是否有 contenteditable 元素处于 focus 状态)
+  const editing = document.activeElement && document.activeElement.classList.contains('editable-remark');
+  const editingIP = editing ? document.activeElement.dataset.ip : null;
+  
   tbody.innerHTML = devs.map((d) => `
     <tr>
       <td>${d.ip}</td>
       <td>${d.hostname || '-'}</td>
+      <td><span class="editable-remark" data-ip="${d.ip}" contenteditable="true" 
+          title="点击编辑备注(最多64字符)">${escapeHTML(d.remark || '')}</span></td>
       <td>${fmtBytes(d.tx_bytes)}</td>
       <td>${fmtBytes(d.rx_bytes)}</td>
       <td>${d.active_conns}</td>
       <td>${d.total_conns}</td>
       <td>${fmtTime(d.last_seen)}</td>
     </tr>`).join('');
+  
+  // 绑定备注编辑事件(失焦时保存)
+  tbody.querySelectorAll('.editable-remark').forEach(el => {
+    el.addEventListener('blur', () => saveRemark(el));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+  
+  // 恢复编辑状态(重新聚焦)
+  if (editingIP) {
+    const el = tbody.querySelector(`.editable-remark[data-ip="${editingIP}"]`);
+    if (el) {
+      el.focus();
+      // 光标移到末尾
+      const range = document.createRange();
+      const sel = window.getSelection();
+      if (el.childNodes.length > 0) {
+        range.setStart(el.childNodes[0], el.textContent.length);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  }
+}
+
+// saveRemark 保存设备备注到后端(失焦或回车时调用)
+async function saveRemark(el) {
+  const ip = el.dataset.ip;
+  const remark = el.textContent.trim().substring(0, 64); // 限制64字符
+  try {
+    await fetch('/api/device/remark', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip, remark })
+    });
+  } catch (e) {
+    console.error('保存备注失败:', e);
+  }
+}
+
+// escapeHTML 防止 XSS(备注可能包含 <>&)
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 function renderConns(conns) {

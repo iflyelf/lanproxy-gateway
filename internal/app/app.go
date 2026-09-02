@@ -48,7 +48,7 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("初始化认证失败: %w", err)
 	}
-	scanner := device.New(cfg.Device.DHCPLeaseFiles, cfg.Device.ScanIntervalSeconds)
+	scanner := device.New(cfg.Device.DHCPLeaseFiles, cfg.Device.ScanIntervalSeconds, cfg.Device.RemarkFile)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

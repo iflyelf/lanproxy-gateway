@@ -3,9 +3,11 @@ package device
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -14,29 +16,39 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// Scanner 定期扫描 ARP 表与 DHCP 租约,为设备 IP 补充主机名。
+// Scanner 定期扫描 ARP 表与 DHCP 租约,为设备 IP 补充主机名;同时管理设备的自定义备注。
 type Scanner struct {
 	mu        sync.RWMutex
-	hostnames map[string]string // IP -> hostname
+	hostnames map[string]string    // IP -> hostname
+	remarks   map[string]string    // IP -> 用户自定义备注
 	lastSeen  map[string]time.Time // IP -> 最后活跃时间(用于清理)
 
-	leaseFiles []string
-	interval   time.Duration
-	stopCh     chan struct{}
+	leaseFiles  []string
+	remarkFile  string // 备注持久化文件路径
+	interval    time.Duration
+	stopCh      chan struct{}
+	remarkDirty bool // 备注是否已变更(需要保存)
 }
 
-// New 创建设备扫描器。
-func New(leaseFiles []string, intervalSec int) *Scanner {
+// New 创建设备扫描器。remarkFile 为备注持久化文件路径,留空则不持久化。
+func New(leaseFiles []string, intervalSec int, remarkFile string) *Scanner {
 	if intervalSec <= 0 {
 		intervalSec = 10
 	}
-	return &Scanner{
+	s := &Scanner{
 		hostnames:  make(map[string]string),
+		remarks:    make(map[string]string),
 		lastSeen:   make(map[string]time.Time),
 		leaseFiles: leaseFiles,
+		remarkFile: remarkFile,
 		interval:   time.Duration(intervalSec) * time.Second,
 		stopCh:     make(chan struct{}),
 	}
+	// 启动时加载备注
+	if remarkFile != "" {
+		s.loadRemarks()
+	}
+	return s
 }
 
 // Start 启动后台扫描协程。
@@ -54,6 +66,27 @@ func (s *Scanner) Hostname(ip string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.hostnames[ip]
+}
+
+// Remark 返回指定 IP 的自定义备注,无则返回空串。
+func (s *Scanner) Remark(ip string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.remarks[ip]
+}
+
+// SetRemark 设置指定 IP 的备注(线程安全),并标记为需要持久化。
+func (s *Scanner) SetRemark(ip, remark string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if remark == "" {
+		delete(s.remarks, ip)
+	} else {
+		s.remarks[ip] = remark
+	}
+	s.remarkDirty = true
+	// 异步保存(避免阻塞 API 响应)
+	go s.saveRemarks()
 }
 
 func (s *Scanner) scanLoop(ctx context.Context) {
@@ -192,4 +225,42 @@ func (s *Scanner) parseDHCPLeases(path string) map[string]string {
 		}
 	}
 	return m
+}
+
+// loadRemarks 从文件加载备注(启动时调用)。
+func (s *Scanner) loadRemarks() {
+	if s.remarkFile == "" {
+		return
+	}
+	data, err := os.ReadFile(s.remarkFile)
+	if err != nil {
+		return // 文件不存在或读取失败,忽略
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = json.Unmarshal(data, &s.remarks)
+}
+
+// saveRemarks 将备注保存到文件(异步调用,需要时才保存)。
+func (s *Scanner) saveRemarks() {
+	s.mu.Lock()
+	if !s.remarkDirty || s.remarkFile == "" {
+		s.mu.Unlock()
+		return
+	}
+	s.remarkDirty = false
+	remarks := make(map[string]string, len(s.remarks))
+	for k, v := range s.remarks {
+		remarks[k] = v
+	}
+	s.mu.Unlock()
+
+	// 写入临时文件后原子替换(避免写到一半进程崩溃导致文件损坏)
+	data, _ := json.MarshalIndent(remarks, "", "  ")
+	dir := filepath.Dir(s.remarkFile)
+	_ = os.MkdirAll(dir, 0755)
+	tmpFile := s.remarkFile + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0644); err == nil {
+		_ = os.Rename(tmpFile, s.remarkFile)
+	}
 }

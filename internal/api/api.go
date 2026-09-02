@@ -48,6 +48,7 @@ func (s *Server) Start() error {
 	// 受保护接口。
 	mux.Handle("/api/status", s.auth.Middleware(http.HandlerFunc(s.handleStatus)))
 	mux.Handle("/api/devices", s.auth.Middleware(http.HandlerFunc(s.handleDevices)))
+	mux.Handle("/api/device/remark", s.auth.Middleware(http.HandlerFunc(s.handleSetRemark)))
 	mux.Handle("/api/connections", s.auth.Middleware(http.HandlerFunc(s.handleConnections)))
 	mux.Handle("/api/traffic", s.auth.Middleware(http.HandlerFunc(s.handleTraffic)))
 	mux.Handle("/api/logs", s.auth.Middleware(http.HandlerFunc(s.handleLogs)))
@@ -134,10 +135,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
-// DeviceView 是设备列表条目,附带主机名。
+// DeviceView 是设备列表条目,附带主机名与自定义备注。
 type DeviceView struct {
 	stats.DeviceStat
 	Hostname string `json:"hostname"`
+	Remark   string `json:"remark"`
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
@@ -147,9 +149,38 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		out = append(out, DeviceView{
 			DeviceStat: d,
 			Hostname:   s.scanner.Hostname(d.IP),
+			Remark:     s.scanner.Remark(d.IP),
 		})
 	}
 	writeJSON(w, out)
+}
+
+// handleSetRemark 设置设备的自定义备注。请求体: {"ip": "...", "remark": "..."}
+func (s *Server) handleSetRemark(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		IP     string `json:"ip"`
+		Remark string `json:"remark"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	req.IP = strings.TrimSpace(req.IP)
+	if req.IP == "" {
+		http.Error(w, "ip is required", http.StatusBadRequest)
+		return
+	}
+	// 限制备注长度,避免滥用
+	req.Remark = strings.TrimSpace(req.Remark)
+	if len([]rune(req.Remark)) > 64 {
+		req.Remark = string([]rune(req.Remark)[:64])
+	}
+	s.scanner.SetRemark(req.IP, req.Remark)
+	writeJSON(w, map[string]any{"ok": true, "ip": req.IP, "remark": req.Remark})
 }
 
 func (s *Server) handleConnections(w http.ResponseWriter, r *http.Request) {

@@ -93,6 +93,8 @@ type DeviceConfig struct {
 	ScanIntervalSeconds int `yaml:"scan_interval_seconds"`
 	// DHCPLeaseFiles 是可选的 DHCP 租约文件路径列表,用于解析主机名。
 	DHCPLeaseFiles []string `yaml:"dhcp_lease_files"`
+	// RemarkFile 是设备备注持久化文件路径(JSON 格式,留空则不保存备注)。
+	RemarkFile string `yaml:"remark_file"`
 }
 
 // Default 返回一份带有合理默认值的配置。
@@ -140,6 +142,7 @@ func Default() *Config {
 				"/var/lib/misc/dnsmasq.leases",
 				"/var/lib/dnsmasq/dnsmasq.leases",
 			},
+			RemarkFile: "/var/lib/lanproxy-gateway/device-remarks.json",
 		},
 		Log: LogConfig{
 			Path:       "/var/log/lanproxy-gateway/gateway.log",
