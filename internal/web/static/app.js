@@ -20,9 +20,9 @@ const fmtTime = (ts) => {
 };
 const fmtUptime = (s) => {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `运行 ${d}天${h}时`;
-  if (h > 0) return `运行 ${h}时${m}分`;
-  return `运行 ${m}分`;
+  if (d > 0) return `${d}天${h}时`;
+  if (h > 0) return `${h}时${m}分`;
+  return `${m}分`;
 };
 
 /* ============ 主题 ============ */
