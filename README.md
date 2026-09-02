@@ -133,6 +133,7 @@ tail -f ./logs/gateway.log      # 文件日志(按天切割)
 | `web.listen` | WebUI 监听地址,建议绑定 LAN 网段 |
 | `web.username` / `web.password` | 登录凭据(明文或 `$2` 开头的 bcrypt 哈希) |
 | `device.dhcp_lease_files` | DHCP 租约文件路径,用于解析设备主机名 |
+| `device.remark_file` | 设备备注持久化文件路径(JSON 格式),留空则不保存备注 |
 | `log.path` | 日志文件路径,留空则仅控制台;按天切割为 `gateway-YYYY-MM-DD.log` |
 | `log.level` | 日志级别 `debug`/`info`/`warn`/`error`(默认 `info`) |
 | `log.max_age_days` | 日志保留天数,过期自动清理(默认 `7`,`0`=不清理) |
@@ -194,7 +195,7 @@ lanproxy-gateway clean -c /etc/lanproxy-gateway/gateway.yaml
 | 页面 | 内容 |
 |---|---|
 | **网络总览** | 总流量/活动连接/设备数指标卡片、实时流量趋势曲线(5 分钟)、力导向流量拓扑(节点大小=连接数,连线粗细=流量,可拖拽) |
-| **设备与服务** | 设备流量排行:每设备上/下行、活动/累计连接、主机名、最近活动 |
+| **设备与服务** | 设备流量排行:每设备上/下行、活动/累计连接、主机名、最近活动;支持为设备编辑自定义备注(持久化到 `device.remark_file`) |
 | **访问记录** | 最近连接记录,可按出口(代理/直连/失败)与源 IP 筛选 |
 | **日志** | 在线查看当天日志尾部,支持级别筛选、关键字过滤、行数选择、自动刷新(5s),方便远程排查 |
 | **设置** | 当前网络信息(CloudFlare/墙外出口 IP 与归属地)、外观主题切换、系统配置一览 |
