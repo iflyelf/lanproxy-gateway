@@ -37,6 +37,7 @@ device:
     dhcp_lease_files:
         - /var/lib/misc/dnsmasq.leases
         - /var/lib/dnsmasq/dnsmasq.leases
+    remark_file: /var/lib/lanproxy-gateway/device-remarks.json
 log:
     # 日志文件路径(留空则仅输出到控制台)。按天切割,实际文件名带日期后缀,如 gateway-2026-09-02.log
     path: /var/log/lanproxy-gateway/gateway.log
