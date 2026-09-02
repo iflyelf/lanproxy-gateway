@@ -86,6 +86,11 @@ function showLogin() {
 function showApp() {
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
+  // 页面显示后重算 canvas 尺寸(初始化时容器隐藏,尺寸为 0)
+  requestAnimationFrame(() => {
+    if (window._trafficChart) window._trafficChart.resize();
+    if (window._topo) window._topo.resize();
+  });
   startPolling();
 }
 
@@ -122,10 +127,10 @@ function startPolling() {
 async function loadAll() {
   try {
     const [status, devices, conns, traffic] = await Promise.all([
-      fetch('/api/status').then((r) => r.json()),
-      fetch('/api/devices').then((r) => r.json()),
-      fetch('/api/connections').then((r) => r.json()),
-      fetch('/api/traffic').then((r) => r.json()),
+      fetch('/api/status').then((r) => { if (r.status === 401) throw new Error('UNAUTHORIZED'); return r.json(); }),
+      fetch('/api/devices').then((r) => { if (r.status === 401) throw new Error('UNAUTHORIZED'); return r.json(); }),
+      fetch('/api/connections').then((r) => { if (r.status === 401) throw new Error('UNAUTHORIZED'); return r.json(); }),
+      fetch('/api/traffic').then((r) => { if (r.status === 401) throw new Error('UNAUTHORIZED'); return r.json(); }),
     ]);
     renderStatus(status);
     renderDevices(devices);
@@ -133,9 +138,11 @@ async function loadAll() {
     if (window._trafficChart) window._trafficChart.update(traffic || []);
     if (window._topo) window._topo.update(devices || []);
   } catch (e) {
-    // 401 等:回到登录
-    showLogin();
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    // 仅 401 未授权时退出登录,其他错误(网络抖动/超时/5xx)静默重试,避免误退出
+    if (e.message === 'UNAUTHORIZED') {
+      showLogin();
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
   }
 }
 
@@ -269,6 +276,8 @@ class TrafficChart {
   }
   update(samples) {
     this.samples = samples || [];
+    // 若 canvas 尺寸为 0(初始化时容器隐藏),先重算尺寸再绘制
+    if (!this.w) this.resize();
     this.draw();
   }
   draw() {
@@ -358,6 +367,8 @@ class ForceTopology {
   }
   update(devices) {
     devices = devices || [];
+    // 若 canvas 尺寸为 0(初始化时容器隐藏),先重算尺寸再更新
+    if (!this.w) this.resize();
     // 限制渲染节点数(防 O(n²) 卡顿)
     const top = devices.slice(0, 200);
     const gateway = { id: 'gateway', label: '网关', x: this.w / 2, y: this.h / 2, vx: 0, vy: 0, r: 16, fixed: true };
