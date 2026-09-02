@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/iflyelf/lanproxy-gateway/internal/app"
@@ -101,16 +103,35 @@ func statusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// 探测 LAN 网卡与其 IPv4 地址、掩码,供接入指引直接显示实际值。
+			ifaceName, lanIP, netmask := detectLAN(cfg.LANInterface)
+
 			fmt.Printf("配置文件      : %s\n", cfgPath)
-			fmt.Printf("LAN 网卡      : %s\n", orAuto(cfg.LANInterface))
+			if cfg.LANInterface == "" && ifaceName != "" {
+				fmt.Printf("LAN 网卡      : %s (自动探测)\n", ifaceName)
+			} else {
+				fmt.Printf("LAN 网卡      : %s\n", orAuto(cfg.LANInterface))
+			}
+			if lanIP != "" {
+				fmt.Printf("本机 LAN IP   : %s\n", lanIP)
+			}
 			fmt.Printf("上游代理      : %s (%s)\n", cfg.Upstream.Address, cfg.Upstream.Type)
 			fmt.Printf("TPROXY 端口   : %d\n", cfg.TProxy.ListenPort)
-			fmt.Printf("WebUI         : http://%s\n", cfg.Web.Listen)
+			fmt.Printf("WebUI         : %s\n", webURL(cfg.Web.Listen, lanIP))
 			fmt.Println()
 			fmt.Println("设备接入方式(在每台设备上手动设置静态网络):")
-			fmt.Println("  网关   : 本机 LAN IP")
-			fmt.Println("  DNS    : 本机 LAN IP (由 smartdns 提供,端口 53)")
-			fmt.Println("  掩码   : 255.255.255.0")
+			if lanIP != "" {
+				fmt.Printf("  网关   : %s\n", lanIP)
+				fmt.Printf("  DNS    : %s (由 smartdns 提供,端口 53)\n", lanIP)
+			} else {
+				fmt.Println("  网关   : 本机 LAN IP(未探测到,请手动确认)")
+				fmt.Println("  DNS    : 本机 LAN IP (由 smartdns 提供,端口 53)")
+			}
+			if netmask != "" {
+				fmt.Printf("  掩码   : %s\n", netmask)
+			} else {
+				fmt.Println("  掩码   : 255.255.255.0")
+			}
 			return nil
 		},
 	}
@@ -182,4 +203,67 @@ func orAuto(s string) string {
 		return "(自动探测)"
 	}
 	return s
+}
+
+// detectLAN 探测 LAN 网卡的 IPv4 地址与掩码。
+// 返回:网卡名、IP 地址、子网掩码(点分十进制)。
+func detectLAN(configIface string) (string, string, string) {
+	var targetIface string
+	if configIface != "" {
+		targetIface = configIface
+	} else {
+		// 自动探测:找第一个有 IPv4 地址的非 loopback 网卡
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			return "", "", ""
+		}
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+					targetIface = iface.Name
+					break
+				}
+			}
+			if targetIface != "" {
+				break
+			}
+		}
+	}
+	if targetIface == "" {
+		return "", "", ""
+	}
+
+	// 获取该网卡的 IPv4 地址与掩码
+	iface, err := net.InterfaceByName(targetIface)
+	if err != nil {
+		return targetIface, "", ""
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return targetIface, "", ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+			ip := ipnet.IP.String()
+			mask := net.IP(ipnet.Mask).String()
+			return targetIface, ip, mask
+		}
+	}
+	return targetIface, "", ""
+}
+
+// webURL 将 listen 地址转换为可访问的 URL。
+// 若 listen 是 0.0.0.0,用 lanIP 替换;否则保持原样。
+func webURL(listen, lanIP string) string {
+	if strings.HasPrefix(listen, "0.0.0.0:") && lanIP != "" {
+		return "http://" + strings.Replace(listen, "0.0.0.0", lanIP, 1)
+	}
+	return "http://" + listen
 }
