@@ -289,11 +289,12 @@ document.querySelectorAll('.theme-opt').forEach((el) => {
   el.addEventListener('click', () => applyTheme(el.dataset.theme));
 });
 
-/* ============ 网络信息(仅 CloudFlare + 墙外) ============ */
+/* ============ 网络信息(代理出口 + 本地公网) ============ */
 async function loadNetworkInfo() {
   fetchCF();
   fetchOuter();
 }
+// fetchCF: 通过 CloudFlare CDN 检测代理出口 IP(会走代理)
 async function fetchCF() {
   try {
     const r = await fetch('https://help.x.com/cdn-cgi/trace?t=' + Date.now());
@@ -312,6 +313,7 @@ async function fetchCF() {
     if ($('cfISP')) $('cfISP').textContent = '-';
   }
 }
+// fetchOuter: 通过墙外 API 检测本地公网 IP(直连,不走代理)
 async function fetchOuter() {
   try {
     const r = await fetch('https://api.cmliussss.net/api/ipinfo?t=' + Date.now());
