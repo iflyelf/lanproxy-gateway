@@ -121,17 +121,21 @@ tail -f ./logs/gateway.log      # 文件日志(按天切割)
 | `lan_interface` | 面向局域网的网卡;留空自动探测 |
 | `upstream.type` | `http` 或 `socks5` |
 | `upstream.address` | 上游代理地址,通常 `127.0.0.1:7890`(clash) |
+| `upstream.username` / `upstream.password` | 上游代理认证凭据,留空则不认证 |
 | `tproxy.listen_port` | relay 的 TPROXY 监听端口(默认 12345) |
 | `tproxy.fwmark` | 打给被代理流量的 fwmark(默认 1) |
 | `tproxy.route_table` | 策略路由表编号(默认 100) |
 | `tproxy.bypass_cidrs` | 直连网段 IPv4(局域网/保留地址,不走代理) |
 | `tproxy.bypass_cidrs6` | 直连网段 IPv6(不走代理) |
+| `tproxy.tcp_only` | 是否仅代理 TCP 流量,不接管 UDP(默认 `true`) |
 | `tproxy.enable_ipv6` | 是否同时接管 IPv6 TCP 流量(默认 `false`) |
 | `tproxy.fallback_direct` | 代理失败时自动回退直连(默认 `true`) |
 | `tproxy.block_quic` | 阻断 UDP/443 强制浏览器用 TCP(消除 YouTube 首次加载延迟,默认 `false`) |
 | `tproxy.max_connections` | 并发连接数上限,0=不限(默认 0,高负载场景可设 18000) |
 | `web.listen` | WebUI 监听地址,建议绑定 LAN 网段 |
 | `web.username` / `web.password` | 登录凭据(明文或 `$2` 开头的 bcrypt 哈希) |
+| `web.session_secret` | 会话签名密钥,留空则每次启动随机生成(会导致重启后需重新登录) |
+| `device.scan_interval_seconds` | 设备扫描间隔(秒),用于更新在线设备列表(默认 10) |
 | `device.dhcp_lease_files` | DHCP 租约文件路径,用于解析设备主机名 |
 | `device.remark_file` | 设备备注持久化文件路径(JSON 格式),留空则不保存备注 |
 | `log.path` | 日志文件路径,留空则仅控制台;按天切割为 `gateway-YYYY-MM-DD.log` |
