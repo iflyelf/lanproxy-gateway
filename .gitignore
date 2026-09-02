@@ -30,3 +30,6 @@ gateway.yaml
 # Go workspace
 go.work
 go.work.sum
+
+# 编译产物
+/gateway

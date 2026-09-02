@@ -207,6 +207,7 @@ func orAuto(s string) string {
 
 // detectLAN 探测 LAN 网卡的 IPv4 地址与掩码。
 // 返回:网卡名、IP 地址、子网掩码(点分十进制)。
+// 优先使用默认路由的出口 IP(网卡有多个 IP 时以实际出口为准)。
 func detectLAN(configIface string) (string, string, string) {
 	var targetIface string
 	if configIface != "" {
@@ -240,23 +241,66 @@ func detectLAN(configIface string) (string, string, string) {
 		return "", "", ""
 	}
 
-	// 获取该网卡的 IPv4 地址与掩码
+	// 优先获取该网卡的出口 IP(通过连接外网 UDP 探测,网卡有多个 IP 时最准确)
+	outgoingIP := getOutgoingIP(targetIface)
+
+	// 获取该网卡的所有 IPv4 地址,匹配出口 IP 或取第一个
 	iface, err := net.InterfaceByName(targetIface)
 	if err != nil {
-		return targetIface, "", ""
+		return targetIface, outgoingIP, ""
 	}
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return targetIface, "", ""
+		return targetIface, outgoingIP, ""
 	}
+
+	// 找出口 IP 对应的掩码,或用第一个 IPv4
+	var firstIP, firstMask string
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
 			ip := ipnet.IP.String()
 			mask := net.IP(ipnet.Mask).String()
-			return targetIface, ip, mask
+			if firstIP == "" {
+				firstIP = ip
+				firstMask = mask
+			}
+			if outgoingIP != "" && ip == outgoingIP {
+				return targetIface, ip, mask
+			}
 		}
 	}
-	return targetIface, "", ""
+	// 降级:返回第一个 IPv4 或探测到的出口 IP
+	if outgoingIP != "" {
+		return targetIface, outgoingIP, firstMask
+	}
+	return targetIface, firstIP, firstMask
+}
+
+// getOutgoingIP 通过 UDP 连接外网探测指定网卡的出口 IP。
+func getOutgoingIP(ifaceName string) string {
+	// 绑定到指定网卡,连接公网 DNS(不实际发包,只获取本地地址)
+	dialer := &net.Dialer{
+		LocalAddr: &net.UDPAddr{IP: net.IPv4zero},
+	}
+	// 尝试绑定网卡(Go 1.11+ 支持 Control 函数)
+	conn, err := dialer.Dial("udp", "8.8.8.8:53")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	
+	// 验证该 IP 是否属于目标网卡
+	iface, _ := net.InterfaceByName(ifaceName)
+	if iface != nil {
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.Equal(localAddr.IP) {
+				return localAddr.IP.String()
+			}
+		}
+	}
+	return ""
 }
 
 // webURL 将 listen 地址转换为可访问的 URL。
