@@ -51,6 +51,9 @@ services:
     volumes:
       # 配置文件 (首次运行前先在当前目录准备好 gateway.yaml)
       - ./gateway.yaml:/etc/lanproxy-gateway/gateway.yaml:rw
+      # 日志目录持久化到宿主机 ./logs (否则日志仅存于容器可写层, 重建容器即丢失)
+      # 对应 gateway.yaml 中 log.path: /var/log/lanproxy-gateway/gateway.log
+      - ./logs:/var/log/lanproxy-gateway:rw
       # DHCP 租约文件 (可选, 用于解析设备主机名; 按实际 dnsmasq 路径调整)
       - /var/lib/misc:/var/lib/misc:ro
       # 与宿主机保持一致的时区

@@ -100,9 +100,17 @@ vi ./gateway.yaml
 
 # 4. 启动
 docker compose up -d
+
+# 5. 查看日志(已持久化到宿主机 ./logs)
+docker compose logs -f          # 容器 stdout
+tail -f ./logs/gateway.log      # 文件日志(按天切割)
 ```
 
 透明网关必须使用 `network_mode: host`,并需要 `NET_ADMIN` 能力(TPROXY / 策略路由 / nftables)。
+
+> 日志目录 `./logs` 已通过卷挂载到容器的 `/var/log/lanproxy-gateway`,重建容器不丢日志。
+> Docker 容器可写层默认可写,不会出现 systemd `ProtectSystem=strict` 那种只读问题;
+> 只有当你手动给容器加了 `read_only: true` 时才需要额外声明可写路径。
 
 ## 配置说明
 
