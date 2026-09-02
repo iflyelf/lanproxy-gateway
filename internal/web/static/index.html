@@ -45,25 +45,81 @@
 
     <!-- 网络总览 -->
     <div id="page-overview" class="page">
-      <section class="cards">
-        <div class="card">
-          <div class="card-label">总上行</div>
-          <div id="mTx" class="card-value">-</div>
+      <!-- 关键指标卡片 -->
+      <section class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-icon tx-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14m7-7l-7-7-7 7"/>
+            </svg>
+          </div>
+          <div class="metric-content">
+            <div class="metric-label">总上行</div>
+            <div id="mTx" class="metric-value">-</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">总下行</div>
-          <div id="mRx" class="card-value">-</div>
+        <div class="metric-card">
+          <div class="metric-icon rx-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 19V5m-7 7l7 7 7-7"/>
+            </svg>
+          </div>
+          <div class="metric-content">
+            <div class="metric-label">总下行</div>
+            <div id="mRx" class="metric-value">-</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">活动连接</div>
-          <div id="mActive" class="card-value">-</div>
+        <div class="metric-card">
+          <div class="metric-icon conn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M7.05 7.05L4.22 4.22m15.56 15.56L17.95 17.95M1 12h6m6 0h6M7.05 16.95l-2.83 2.83m15.56-15.56l-2.83 2.83"/>
+            </svg>
+          </div>
+          <div class="metric-content">
+            <div class="metric-label">活动连接</div>
+            <div id="mActive" class="metric-value">-</div>
+            <div id="mTotalConns" class="metric-sub">累计: -</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">设备数</div>
-          <div id="mDevices" class="card-value">-</div>
+        <div class="metric-card">
+          <div class="metric-icon dev-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/>
+            </svg>
+          </div>
+          <div class="metric-content">
+            <div class="metric-label">在线设备</div>
+            <div id="mDevices" class="metric-value">-</div>
+            <div class="metric-sub">台设备接入</div>
+          </div>
         </div>
       </section>
 
+      <!-- 系统信息 -->
+      <section class="info-cards">
+        <div class="info-card">
+          <div class="info-row">
+            <span class="info-label">运行时长</span>
+            <span id="uptimeInfo" class="info-value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">上游代理</span>
+            <span id="upstreamInfo" class="info-value">-</span>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-row">
+            <span class="info-label">LAN 网卡</span>
+            <span id="lanInfo" class="info-value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">直连回退</span>
+            <span id="fallbackInfo" class="info-badge">-</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 实时流量趋势 -->
       <section class="panel">
         <div class="panel-head">
           <h2>实时流量趋势</h2>
@@ -77,6 +133,7 @@
         </div>
       </section>
 
+      <!-- 流量拓扑 -->
       <section class="panel">
         <div class="panel-head">
           <h2>流量拓扑</h2>

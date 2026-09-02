@@ -150,10 +150,21 @@ async function loadAll() {
 function renderStatus(s) {
   $('uptime').textContent = fmtUptime(s.uptime_seconds);
   const t = s.totals || {};
+  
+  // 关键指标卡片
   $('mTx').textContent = fmtBytes(t.tx_bytes || 0);
   $('mRx').textContent = fmtBytes(t.rx_bytes || 0);
   $('mActive').textContent = t.active_conns || 0;
+  $('mTotalConns').textContent = `累计: ${t.total_conns || 0}`;
   $('mDevices').textContent = t.device_count || 0;
+  
+  // 系统信息卡片
+  $('uptimeInfo').textContent = fmtUptime(s.uptime_seconds);
+  $('upstreamInfo').textContent = `${s.upstream_type || '-'} · ${s.upstream || '-'}`;
+  $('lanInfo').textContent = s.lan_interface || '(自动探测)';
+  $('fallbackInfo').textContent = s.fallback_direct ? '开启' : '关闭';
+  $('fallbackInfo').className = 'info-badge ' + (s.fallback_direct ? 'on' : 'off');
+  
   // 设置页
   $('cfgUpstream').textContent = s.upstream || '-';
   $('cfgUpstreamType').textContent = (s.upstream_type || '-').toUpperCase();

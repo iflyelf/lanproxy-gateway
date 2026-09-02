@@ -226,6 +226,128 @@ body {
 .card-value { font-size: 26px; font-weight: 700; color: var(--accent); }
 .card-value.small { font-size: 15px; color: var(--text); word-break: break-all; }
 
+/* ============ 增强版指标卡片(带图标) ============ */
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.metric-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.metric-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.metric-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.tx-icon {
+  background: linear-gradient(135deg, #ff6b6b22, #ff8c8c22);
+  color: #ff6b6b;
+}
+.rx-icon {
+  background: linear-gradient(135deg, #4ecdc422, #44bfb422);
+  color: #4ecdc4;
+}
+.conn-icon {
+  background: linear-gradient(135deg, #feca5722, #ffd97022);
+  color: #feca57;
+}
+.dev-icon {
+  background: linear-gradient(135deg, #a29bfe22, #6c5ce722);
+  color: #a29bfe;
+}
+.metric-content {
+  flex: 1;
+  min-width: 0;
+}
+.metric-label {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+.metric-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ============ 系统信息卡片 ============ */
+.info-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.info-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+.info-row:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+.info-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.info-value {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+.info-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.info-badge.on {
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+}
+.info-badge.off {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  color: var(--muted);
+}
+
 /* ============ 面板 ============ */
 .panel {
   background: var(--panel);
@@ -415,6 +537,12 @@ canvas { width: 100%; display: block; border-radius: 10px; touch-action: none; }
   .cards { gap: 12px; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); }
   .card { padding: 15px 16px; }
   .card-value { font-size: 22px; }
+  .metric-cards { gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .metric-card { padding: 14px; gap: 12px; }
+  .metric-icon { width: 40px; height: 40px; }
+  .metric-icon svg { width: 20px; height: 20px; }
+  .metric-value { font-size: 22px; }
+  .info-cards { gap: 12px; grid-template-columns: 1fr; }
   .panel { padding: 16px 14px; margin-bottom: 16px; }
   #trafficChart { height: 170px; }
   #topoCanvas { height: 280px; }
