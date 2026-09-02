@@ -113,6 +113,8 @@ type StatusResponse struct {
 	Upstream       string       `json:"upstream"`
 	UpstreamType   string       `json:"upstream_type"`
 	LANInterface   string       `json:"lan_interface"`
+	TproxyPort     int          `json:"tproxy_port"`
+	WebAddr        string       `json:"web_addr"`
 	FallbackDirect bool         `json:"fallback_direct"`
 	BlockQUIC      bool         `json:"block_quic"`
 	EnableIPv6     bool         `json:"enable_ipv6"`
@@ -126,6 +128,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		Upstream:       s.cfg.Upstream.Address,
 		UpstreamType:   s.cfg.Upstream.Type,
 		LANInterface:   s.cfg.LANInterface,
+		TproxyPort:     s.cfg.TProxy.ListenPort,
+		WebAddr:        s.cfg.Web.Listen,
 		FallbackDirect: s.cfg.TProxy.FallbackDirect,
 		BlockQUIC:      s.cfg.TProxy.BlockQUIC,
 		EnableIPv6:     s.cfg.TProxy.EnableIPv6,
