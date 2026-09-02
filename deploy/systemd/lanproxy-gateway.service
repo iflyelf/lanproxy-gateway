@@ -22,15 +22,16 @@ Type=simple
 ExecStart=/usr/local/bin/lanproxy-gateway run -c /etc/lanproxy-gateway/gateway.yaml
 # 重启当前服务时执行的命令(热加载)
 ExecReload=/bin/kill -s HUP $MAINPID
-# 停止当前服务时执行的命令(触发优雅退出并清理 nftables/路由)
-ExecStop=/bin/kill -s TERM $MAINPID
 # 启动服务用户
 User=root
 # 启动服务用户组
 Group=root
-# 停止所有进程
-KillMode=control-group
-# 强制终止的信号
+# 停止方式:仅向主进程发 SIGTERM,由程序自身完成 nftables/策略路由清理后退出。
+#   不使用 ExecStop + KillMode=control-group 组合:否则 systemd 在 ExecStop 返回后
+#   会向整个 cgroup(含清理时 fork 的 nft 子进程)再发信号,导致清理中途被杀
+#   (报错 "删除 nft 表失败: signal: terminated"),规则残留进而拖垮 DNS。
+KillMode=mixed
+# 停止信号(systemd 直接发给主进程)
 KillSignal=SIGTERM
 # 等待 30 秒后,强制终止(留足时间清理 nftables 规则与策略路由)
 TimeoutStopSec=30

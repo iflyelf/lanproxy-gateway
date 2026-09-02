@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 )
 
 // Manager 负责开启 IP 转发与配置策略路由,使打了 fwmark 的流量走本地 TPROXY。
@@ -186,7 +187,9 @@ func (m *Manager) ForceClean() {
 }
 
 func run(name string, args ...string) error {
+	// 清理阶段使用独立进程组,避免子进程被信号连带杀死(规则残留拖垮 DNS)。
 	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/iflyelf/lanproxy-gateway/internal/api"
 	"github.com/iflyelf/lanproxy-gateway/internal/auth"
@@ -115,6 +116,11 @@ func (a *App) Run() error {
 }
 
 // Stop 优雅停止并清理所有系统状态。
+//
+// 顺序很重要:先摘除 nftables 规则(停止新流量进入 relay),再清理策略路由,
+// 最后停 relay 让存量连接收尾。清理失败会重试,避免规则残留——残留的 TPROXY
+// 规则会把 TCP 流量劫持到已失效的 relay 端口,进而导致 DNS(DoT/DoH/TCP 查询)
+// 与其他 TCP 服务不可用。
 func (a *App) Stop() {
 	logger.Infof("正在停止网关并清理系统状态...")
 	a.cancel()
@@ -122,14 +128,41 @@ func (a *App) Stop() {
 		a.apiSrv.Stop()
 	}
 	a.scanner.Stop()
-	if err := a.netfilter.Restore(); err != nil {
-		logger.Errorf("清理 nftables 出错: %v", err)
+
+	// 先删 nftables 规则,阻断新流量进入 relay。失败时重试。
+	if err := retry(3, 300*time.Millisecond, a.netfilter.Restore); err != nil {
+		logger.Errorf("清理 nftables 失败(已重试): %v", err)
+		// 兜底:无条件强制删表,避免残留拖垮 DNS 等 TCP 服务。
+		if ferr := a.netfilter.ForceClean(); ferr != nil {
+			logger.Errorf("强制清理 nftables 仍失败: %v(请手动执行 lanproxy-gateway clean)", ferr)
+		} else {
+			logger.Infof("已通过强制清理移除 nftables 表")
+		}
 	}
-	if err := a.route.Restore(); err != nil {
-		logger.Errorf("清理路由出错: %v", err)
+
+	// 再清理策略路由。失败时重试并兜底强制清理。
+	if err := retry(3, 300*time.Millisecond, a.route.Restore); err != nil {
+		logger.Errorf("清理路由失败(已重试): %v", err)
+		a.route.ForceClean()
+		logger.Infof("已通过强制清理移除策略路由")
 	}
+
 	a.relay.Stop()
 	logger.Infof("已停止。")
+}
+
+// retry 执行 fn,失败则重试 attempts 次(含首次),间隔 delay。
+func retry(attempts int, delay time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = fn(); err == nil {
+			return nil
+		}
+		if i < attempts-1 {
+			time.Sleep(delay)
+		}
+	}
+	return err
 }
 
 // detectDefaultInterface 通过默认路由探测出口网卡。

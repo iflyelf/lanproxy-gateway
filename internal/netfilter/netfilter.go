@@ -5,8 +5,19 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 	"text/template"
 )
+
+// detachedCmd 构造一个运行在独立进程组的命令。
+// 清理阶段(Restore/ForceClean)必须如此:否则当信号发给主进程所在的进程组时
+// (如终端 Ctrl+C、或 systemd KillMode=control-group),正在执行的 nft/ip 子进程
+// 会被连带杀死,导致清理中途失败、规则残留。
+func detachedCmd(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd
+}
 
 // Manager 使用 nftables(nft 命令)构建一个独立的 TPROXY 表。
 // 该表名为 inet lanproxy_gw,与 firewalld 的表互不干扰,卸载时整表删除。
@@ -159,7 +170,8 @@ func (m *Manager) Restore() error {
 }
 
 func (m *Manager) deleteTable() error {
-	cmd := exec.Command("nft", "delete", "table", "inet", m.tableName)
+	// 使用独立进程组,避免清理阶段子进程被信号连带杀死。
+	cmd := detachedCmd("nft", "delete", "table", "inet", m.tableName)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%v (%s)", err, strings.TrimSpace(string(out)))
 	}
@@ -173,7 +185,7 @@ func (m *Manager) ForceClean() error {
 		return nil
 	}
 	// 表不存在时 nft 会报错,视为已清理。
-	cmd := exec.Command("nft", "list", "table", "inet", m.tableName)
+	cmd := detachedCmd("nft", "list", "table", "inet", m.tableName)
 	if err := cmd.Run(); err != nil {
 		return nil // 表不存在
 	}
