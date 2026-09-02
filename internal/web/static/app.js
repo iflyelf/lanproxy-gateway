@@ -29,8 +29,8 @@ const fmtUptime = (s) => {
 function initTheme() {
   let theme = localStorage.getItem('lpg_theme');
   if (!theme) {
-    // 首次:按系统偏好(暗→石墨深色 / 亮→暖沙米)
-    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'beige';
+    // 首次:按系统偏好(暗→dark / 亮→warm)
+    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'warm';
   }
   applyTheme(theme);
 }
@@ -42,8 +42,10 @@ function applyTheme(theme) {
   });
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    const bg = getComputedStyle(document.body).backgroundColor;
-    meta.setAttribute('content', bg);
+    requestAnimationFrame(() => {
+      const bg = getComputedStyle(document.body).backgroundColor;
+      meta.setAttribute('content', bg);
+    });
   }
   // 重绘图表以适配主题色
   if (window._trafficChart) window._trafficChart.draw();
@@ -165,6 +167,10 @@ function renderStatus(s) {
   $('fallbackInfo').textContent = s.fallback_direct ? '开启' : '关闭';
   $('fallbackInfo').className = 'info-badge ' + (s.fallback_direct ? 'on' : 'off');
   
+  // 服务信息
+  if ($('svcTproxyPort')) $('svcTproxyPort').textContent = s.tproxy_port || '-';
+  if ($('svcWebUI')) $('svcWebUI').textContent = s.web_addr || (location.host);
+
   // 设置页
   $('cfgUpstream').textContent = s.upstream || '-';
   $('cfgUpstreamType').textContent = (s.upstream_type || '-').toUpperCase();
@@ -181,18 +187,22 @@ function setBadge(el, on) {
 function renderDevices(devs) {
   devs = devs || [];
   const tbody = $('deviceRows');
-  $('deviceEmpty').classList.toggle('hidden', devs.length > 0);
+  const empty = $('deviceEmpty');
+  const count = $('deviceCount');
   
-  // 避免刷新正在编辑的备注(检查是否有 contenteditable 元素处于 focus 状态)
+  if (count) count.textContent = devs.length;
+  empty.classList.toggle('hidden', devs.length > 0);
+  
+  // 避免刷新正在编辑的备注
   const editing = document.activeElement && document.activeElement.classList.contains('editable-remark');
   const editingIP = editing ? document.activeElement.dataset.ip : null;
   
   tbody.innerHTML = devs.map((d) => `
     <tr>
-      <td>${d.ip}</td>
+      <td><strong>${d.ip}</strong></td>
       <td>${d.hostname || '-'}</td>
       <td><span class="editable-remark" data-ip="${d.ip}" contenteditable="true" 
-          title="点击编辑备注(最多64字符)">${escapeHTML(d.remark || '')}</span></td>
+          title="点击编辑备注">${escapeHTML(d.remark || '')}</span></td>
       <td>${fmtBytes(d.tx_bytes)}</td>
       <td>${fmtBytes(d.rx_bytes)}</td>
       <td>${d.active_conns}</td>
@@ -200,7 +210,7 @@ function renderDevices(devs) {
       <td>${fmtTime(d.last_seen)}</td>
     </tr>`).join('');
   
-  // 绑定备注编辑事件(失焦时保存)
+  // 绑定备注编辑事件
   tbody.querySelectorAll('.editable-remark').forEach(el => {
     el.addEventListener('blur', () => saveRemark(el));
     el.addEventListener('keydown', (e) => {
@@ -211,12 +221,11 @@ function renderDevices(devs) {
     });
   });
   
-  // 恢复编辑状态(重新聚焦)
+  // 恢复编辑状态
   if (editingIP) {
     const el = tbody.querySelector(`.editable-remark[data-ip="${editingIP}"]`);
     if (el) {
       el.focus();
-      // 光标移到末尾
       const range = document.createRange();
       const sel = window.getSelection();
       if (el.childNodes.length > 0) {
@@ -294,26 +303,26 @@ async function fetchCF() {
       const i = line.indexOf('=');
       if (i > 0) kv[line.slice(0, i)] = line.slice(i + 1);
     });
-    $('cfDot').className = 'dot ok';
     $('cfIP').textContent = kv.ip || '-';
-    $('cfLoc').textContent = [kv.loc, kv.colo].filter(Boolean).join(' · ');
+    $('cfLoc').textContent = [kv.loc, kv.colo].filter(Boolean).join(' · ') || '-';
+    if ($('cfISP')) $('cfISP').textContent = kv.colo || '-';
   } catch (e) {
-    $('cfDot').className = 'dot err';
     $('cfIP').textContent = '获取失败';
-    $('cfLoc').textContent = '';
+    $('cfLoc').textContent = '-';
+    if ($('cfISP')) $('cfISP').textContent = '-';
   }
 }
 async function fetchOuter() {
   try {
     const r = await fetch('https://api.cmliussss.net/api/ipinfo?t=' + Date.now());
     const d = await r.json();
-    $('outerDot').className = 'dot ok';
     $('outerIP').textContent = d.ip || d.query || '-';
-    $('outerLoc').textContent = [d.country, d.regionName || d.region, d.city].filter(Boolean).join(' · ');
+    $('outerLoc').textContent = [d.country, d.regionName || d.region, d.city].filter(Boolean).join(' · ') || '-';
+    if ($('outerISP')) $('outerISP').textContent = d.isp || d.org || d.as || '-';
   } catch (e) {
-    $('outerDot').className = 'dot err';
     $('outerIP').textContent = '获取失败';
-    $('outerLoc').textContent = '';
+    $('outerLoc').textContent = '-';
+    if ($('outerISP')) $('outerISP').textContent = '-';
   }
 }
 
@@ -321,7 +330,6 @@ async function fetchOuter() {
 initTheme();
 initTabs();
 setupLogControls();
-startLogAuto();
 checkAuth();
 
 /* ============ 流量曲线图 ============ */
@@ -609,10 +617,8 @@ window._topo = new ForceTopology('topoCanvas');
 async function loadLogs() {
   const level = $('logLevel').value;
   const lines = $('logLines').value;
-  const q = $('logKeyword').value.trim();
   const params = new URLSearchParams({ lines });
   if (level) params.set('level', level);
-  if (q) params.set('q', q);
   try {
     const resp = await fetch('/api/logs?' + params.toString());
     if (!resp.ok) { $('logMeta').textContent = '读取日志失败'; return; }
@@ -627,11 +633,11 @@ function renderLogs(data) {
   const meta = $('logMeta');
   if (!data.enabled) {
     meta.textContent = '未启用文件日志(log.path 为空),仅控制台输出';
-    $('logView').innerHTML = '';
+    $('logContent').innerHTML = '';
     return;
   }
   meta.textContent = `文件: ${data.file}  ·  级别: ${(data.level||'info').toUpperCase()}  ·  共 ${data.lines.length} 行`;
-  const view = $('logView');
+  const view = $('logContent');
   view.innerHTML = data.lines.map(escapeAndColor).join('\n');
   // 滚动到底部
   view.scrollTop = view.scrollHeight;
@@ -648,10 +654,8 @@ function escapeAndColor(line) {
 }
 
 function setupLogControls() {
-  $('logRefresh').addEventListener('click', loadLogs);
   $('logLevel').addEventListener('change', loadLogs);
   $('logLines').addEventListener('change', loadLogs);
-  $('logKeyword').addEventListener('input', debounce(loadLogs, 400));
   $('logAuto').addEventListener('change', (e) => {
     if (e.target.checked) startLogAuto();
     else stopLogAuto();
