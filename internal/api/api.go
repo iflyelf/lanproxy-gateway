@@ -52,12 +52,13 @@ func (s *Server) Start() error {
 	mux.Handle("/api/traffic", s.auth.Middleware(http.HandlerFunc(s.handleTraffic)))
 	mux.Handle("/api/logs", s.auth.Middleware(http.HandlerFunc(s.handleLogs)))
 
-	// 静态前端。
+	// 静态前端。防缓存头避免更新后浏览器用旧缓存导致新旧不匹配空白页。
 	sub, err := fs.Sub(web.FS, "static")
 	if err != nil {
 		return err
 	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	fileServer := http.FileServer(http.FS(sub))
+	mux.Handle("/", noCache(fileServer))
 
 	s.httpSrv = &http.Server{
 		Addr:    s.cfg.Web.Listen,
@@ -231,4 +232,14 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// noCache 为静态资源添加防缓存头,避免二进制更新后浏览器用旧缓存导致 HTML/JS/CSS 版本不匹配。
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		h.ServeHTTP(w, r)
+	})
 }

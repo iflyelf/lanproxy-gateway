@@ -8,8 +8,14 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <!-- 登录页 -->
-  <div id="login" class="login-wrap hidden">
+  <noscript>
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;font-family:sans-serif;">
+      <h2>JavaScript 已禁用</h2>
+      <p>本应用需要 JavaScript 支持,请在浏览器设置中启用 JavaScript。</p>
+    </div>
+  </noscript>
+  <!-- 登录页(初始可见,认证成功后 JS 会隐藏并显示主应用)-->
+  <div id="login" class="login-wrap">
     <form id="loginForm" class="login-card">
       <h1>LAN Proxy Gateway</h1>
       <p class="sub">局域网透明代理网关</p>
